@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 2200 640">
+  <rect width="2200" height="640" fill="#FFFFFF" />
+  <g transform="translate(150 140)">
+    <rect x="0" y="0" width="380" height="380" fill="none" stroke="#F47B20" stroke-width="30" />
+    <text x="190" y="205" text-anchor="middle" dominant-baseline="middle" font-family="Cinzel, 'Times New Roman', serif" font-size="320" font-weight="600" fill="#0C2C52">A</text>
+  </g>
+  <text x="630" y="320" font-family="Cinzel, 'Times New Roman', serif" font-size="230" letter-spacing="20" fill="#0C2C52">ABSOLUTE</text>
+  <text x="630" y="420" font-family="Cinzel, 'Times New Roman', serif" font-size="90" letter-spacing="32" fill="#0C2C52">PROPERTY GROUP</text>
+  <text x="590" y="520" font-family="Cinzel, 'Times New Roman', serif" font-size="85" letter-spacing="4" fill="#0C2C52">MANAGEMENT | SALES | LETTINGS</text>
+</svg>
