@@ -57,6 +57,18 @@ export interface WorkOrder {
   note_for_access?: string;
   comment?: string;
   note?: string;
+  notes?: Array<{
+    id: number;
+    note: string;
+    note_type?: string;
+    created_by?: number;
+    created_at?: string;
+    creator?: {
+      id: number;
+      name?: string;
+      email?: string;
+    };
+  }>;
   contractor?: {
     id: number;
     name?: string;
@@ -71,7 +83,15 @@ export interface WorkOrder {
   images?: Array<{
     id?: number;
     image_path?: string;
+    image_name?: string;
+    image_url?: string;
     url?: string;
+    created_by?: number;
+    creator?: {
+      id: number;
+      name?: string;
+      email?: string;
+    };
   } | string>;
   pdf_path?: string;
   pdf_name?: string;
@@ -172,10 +192,11 @@ class WorkOrderService {
   /**
    * Pause work order (update status to "On Hold")
    */
-  async pauseWorkOrder(id: number): Promise<WorkOrder> {
+  async pauseWorkOrder(id: number, reason: string): Promise<WorkOrder> {
     try {
       const response = await api.post<{ success: boolean; message: string; data: WorkOrder }>(
-        `${AppConstants.endpoints.workOrderDetail}/${id}/pause`
+        `${AppConstants.endpoints.workOrderDetail}/${id}/pause`,
+        { reason }
       );
 
       if (response.status === 401) {
@@ -250,6 +271,155 @@ class WorkOrderService {
     } catch (error: any) {
       console.error('Complete work order error:', error);
       throw new Error(error.response?.data?.message || error.message || 'Failed to complete work order');
+    }
+  }
+
+  /**
+   * Upload photos for work order
+   */
+  async uploadPhotos(id: number, photos: File[]): Promise<WorkOrder> {
+    try {
+      // Check current photo count
+      const currentWorkOrder = await this.getWorkOrderById(id);
+      const currentPhotoCount = currentWorkOrder.images?.length || 0;
+      const totalPhotos = currentPhotoCount + photos.length;
+
+      // Check if adding these photos would exceed the limit of 6
+      if (totalPhotos > 6) {
+        const allowed = 6 - currentPhotoCount;
+        throw new Error(`Maximum 6 photos allowed. You can add ${allowed} more photo(s).`);
+      }
+
+      // Create FormData for multipart/form-data upload
+      const formData = new FormData();
+      photos.forEach((photo) => {
+        formData.append('photos[]', photo);
+      });
+
+      // Make request with FormData (axios will set Content-Type automatically)
+      const response = await api.post<{ success: boolean; message: string; data: WorkOrder }>(
+        `${AppConstants.endpoints.workOrderDetail}/${id}/photos`,
+        formData,
+        {
+          headers: {
+            'Content-Type': 'multipart/form-data',
+          },
+        }
+      );
+
+      if (response.status === 401) {
+        throw new Error('Authentication failed - please login again');
+      }
+
+      if (response.status === 404) {
+        throw new Error('Work order not found');
+      }
+
+      if (response.status === 422 || !response.data.success) {
+        throw new Error(response.data.message || 'Failed to upload photos');
+      }
+
+      return response.data.data;
+    } catch (error: any) {
+      console.error('Upload photos error:', error);
+      throw new Error(error.response?.data?.message || error.message || 'Failed to upload photos');
+    }
+  }
+
+  /**
+   * Delete photo from work order
+   */
+  async deletePhoto(id: number, photoId: number): Promise<WorkOrder> {
+    try {
+      const response = await api.delete<{ success: boolean; message: string; data: WorkOrder }>(
+        `${AppConstants.endpoints.workOrderDetail}/${id}/photos/${photoId}`
+      );
+
+      if (response.status === 401) {
+        throw new Error('Authentication failed - please login again');
+      }
+
+      if (response.status === 403) {
+        throw new Error(response.data.message || 'You do not have permission to delete this photo');
+      }
+
+      if (response.status === 404) {
+        throw new Error('Photo not found');
+      }
+
+      if (!response.data.success) {
+        throw new Error(response.data.message || 'Failed to delete photo');
+      }
+
+      return response.data.data;
+    } catch (error: any) {
+      console.error('Delete photo error:', error);
+      throw new Error(error.response?.data?.message || error.message || 'Failed to delete photo');
+    }
+  }
+
+  /**
+   * Add note to work order
+   */
+  async addNote(id: number, note: string): Promise<WorkOrder> {
+    try {
+      const response = await api.post<{ success: boolean; message: string; data: WorkOrder }>(
+        `${AppConstants.endpoints.workOrderDetail}/${id}/notes`,
+        { note }
+      );
+
+      if (response.status === 401) {
+        throw new Error('Authentication failed - please login again');
+      }
+
+      if (response.status === 403) {
+        throw new Error(response.data.message || 'You cannot add notes to a completed work order');
+      }
+
+      if (response.status === 404) {
+        throw new Error('Work order not found');
+      }
+
+      if (!response.data.success) {
+        throw new Error(response.data.message || 'Failed to add note');
+      }
+
+      return response.data.data;
+    } catch (error: any) {
+      console.error('Add note error:', error);
+      throw new Error(error.response?.data?.message || error.message || 'Failed to add note');
+    }
+  }
+
+  /**
+   * Delete note from work order
+   */
+  async deleteNote(id: number, noteId: number): Promise<WorkOrder> {
+    try {
+      const response = await api.delete<{ success: boolean; message: string; data: WorkOrder }>(
+        `${AppConstants.endpoints.workOrderDetail}/${id}/notes/${noteId}`
+      );
+
+      if (response.status === 401) {
+        throw new Error('Authentication failed - please login again');
+      }
+
+      if (response.status === 403) {
+        throw new Error(response.data.message || 'You do not have permission to delete this note');
+      }
+
+      if (response.status === 404) {
+        throw new Error('Note not found');
+      }
+
+      if (!response.data.success) {
+        throw new Error(response.data.message || 'Failed to delete note');
+      }
+
+      return response.data.data;
+    } catch (error: any) {
+      console.error('Delete note error:', error);
+      throw new Error(error.response?.data?.message || error.message || 'Failed to delete note');
     }
   }
 }

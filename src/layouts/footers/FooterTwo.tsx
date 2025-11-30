@@ -1,15 +1,21 @@
-import { Link } from "react-router-dom";
-
- 
+import { Link, useNavigate } from "react-router-dom";
+import { useAuth } from "../../contexts/AuthContext";
 
 const nav_data = [
 	{ id: 1, icon: "house", title: "Dashboard", link: "dashboard" },
 	{ id: 2, icon: "clipboard-check", title: "Work Orders", link: "work-orders" },
-	{ id: 3, icon: "search", title: "Inspections", link: "inspections" },
 	{ id: 4, icon: "person-circle", title: "Profile", link: "profile" },
 ];
 
 const FooterTwo = () => {
+	const navigate = useNavigate();
+	const { logout } = useAuth();
+
+	const handleLogout = async () => {
+		await logout();
+		navigate("/login");
+	};
+
 	return (
 		<>
 			<div className="footer-nav-area" id="footerNav">
@@ -24,6 +30,12 @@ const FooterTwo = () => {
 									</Link>
 								</li>
 							))}
+							<li>
+								<a href="#" onClick={(e) => { e.preventDefault(); handleLogout(); }}>
+									<i className="bi bi-box-arrow-right"></i>
+									<span>Logout</span>
+								</a>
+							</li>
 						</ul>
 					</div>
 				</div>

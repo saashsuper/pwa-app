@@ -3,15 +3,24 @@ import { useParams, useNavigate } from "react-router-dom";
 import HeaderTwo from "../../layouts/headers/HeaderTwo";
 import FooterTwo from "../../layouts/footers/FooterTwo";
 import workOrderService, { WorkOrder } from "../../services/workOrderService";
+import AppConstants from "../../config/constants";
+import { useAuth } from "../../contexts/AuthContext";
+import ConfirmModal from "../common/ConfirmModal";
+
+const MAX_PHOTOS = 6;
 
 const WorkOrderPhotos = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
+  const { user } = useAuth();
   const [workOrder, setWorkOrder] = useState<WorkOrder | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const [uploading, setUploading] = useState(false);
+  const [deletingPhotoId, setDeletingPhotoId] = useState<number | null>(null);
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [photoToDelete, setPhotoToDelete] = useState<number | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const cameraInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     if (id) {
@@ -32,13 +41,7 @@ const WorkOrderPhotos = () => {
     }
   };
 
-  const handleTakePhoto = () => {
-    if (cameraInputRef.current) {
-      cameraInputRef.current.click();
-    }
-  };
-
-  const handleUploadFromGallery = () => {
+  const handleAddPhotosClick = () => {
     if (fileInputRef.current) {
       fileInputRef.current.click();
     }
@@ -46,17 +49,112 @@ const WorkOrderPhotos = () => {
 
   const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = e.target.files;
-    if (!files || files.length === 0) return;
+    if (!files || files.length === 0 || !id || uploading) return;
+
+    const fileArray = Array.from(files);
+    const currentPhotoCount = workOrder?.images?.length || 0;
+    const totalPhotos = currentPhotoCount + fileArray.length;
+
+    // Check if adding these photos would exceed the limit
+    if (totalPhotos > MAX_PHOTOS) {
+      const allowed = MAX_PHOTOS - currentPhotoCount;
+      setError(`Maximum ${MAX_PHOTOS} photos allowed. You can add ${allowed} more photo(s).`);
+      // Reset file input
+      if (fileInputRef.current) {
+        fileInputRef.current.value = '';
+      }
+      return;
+    }
+
+    setUploading(true);
+    setError("");
 
     try {
-      // TODO: Implement photo upload API call
-      console.log('Uploading photos:', Array.from(files).map(f => f.name));
-      // After successful upload, reload work order to show new photos
-      await loadWorkOrder();
+      const updatedWorkOrder = await workOrderService.uploadPhotos(Number(id), fileArray);
+      setWorkOrder(updatedWorkOrder);
+      
+      // Reset file input
+      if (fileInputRef.current) {
+        fileInputRef.current.value = '';
+      }
     } catch (err: any) {
       setError(err.message || "Failed to upload photos");
+      // Reset file input on error
+      if (fileInputRef.current) {
+        fileInputRef.current.value = '';
+      }
+    } finally {
+      setUploading(false);
     }
   };
+
+  const getCurrentPhotoCount = (): number => {
+    return workOrder?.images?.length || 0;
+  };
+
+  const canAddMorePhotos = (): boolean => {
+    return getCurrentPhotoCount() < MAX_PHOTOS;
+  };
+
+  const getRemainingPhotoCount = (): number => {
+    return MAX_PHOTOS - getCurrentPhotoCount();
+  };
+
+  const isJobCompleted = (): boolean => {
+    if (!workOrder?.job_status) return false;
+    const jobStatus = workOrder.job_status;
+    if (typeof jobStatus === 'string') {
+      return jobStatus.toLowerCase() === 'completed';
+    }
+    if (typeof jobStatus === 'object' && jobStatus.name) {
+      return jobStatus.name.toLowerCase() === 'completed';
+    }
+    return false;
+  };
+
+  const canDeletePhoto = (image: any): boolean => {
+    if (!user || !image) return false;
+    
+    // Cannot delete if job is completed
+    if (isJobCompleted()) return false;
+    
+    // User can delete if they created it
+    if (image.created_by === user.id) return true;
+    
+    // Contractor Admin can delete any photo from their team
+    // (Backend will verify they're in the same contract company)
+    const userType = user.user_type;
+    if (userType && typeof userType === 'object' && userType.name === 'Contractor Admin') {
+      return true;
+    }
+    
+    return false;
+  };
+
+  const handleDeletePhotoClick = (photoId: number) => {
+    if (!id || deletingPhotoId) return;
+    setPhotoToDelete(photoId);
+    setShowDeleteConfirm(true);
+  };
+
+  const handleDeletePhoto = async () => {
+    if (!id || !photoToDelete || deletingPhotoId) return;
+
+    setDeletingPhotoId(photoToDelete);
+    setError("");
+    setShowDeleteConfirm(false);
+
+    try {
+      const updatedWorkOrder = await workOrderService.deletePhoto(Number(id), photoToDelete);
+      setWorkOrder(updatedWorkOrder);
+      setPhotoToDelete(null);
+    } catch (err: any) {
+      setError(err.message || "Failed to delete photo");
+    } finally {
+      setDeletingPhotoId(null);
+    }
+  };
+
 
   if (loading) {
     return (
@@ -121,40 +219,56 @@ const WorkOrderPhotos = () => {
             </div>
           )}
 
-          {/* Action Buttons */}
-          <div className="card mb-3">
-            <div className="card-body">
-              <h6 className="mb-3">Add Photos</h6>
-              <div className="d-grid gap-2">
-                <button
-                  className="btn btn-primary btn-lg"
-                  onClick={handleTakePhoto}
-                  style={{ borderRadius: '8px', padding: '15px' }}
-                >
-                  <i className="bi bi-camera-fill me-2"></i>
-                  Take Photo
-                </button>
-                <button
-                  className="btn btn-outline-primary btn-lg"
-                  onClick={handleUploadFromGallery}
-                  style={{ borderRadius: '8px', padding: '15px' }}
-                >
-                  <i className="bi bi-images me-2"></i>
-                  Upload from Gallery
-                </button>
+          {/* Add Photos Button */}
+          {canAddMorePhotos() && (
+            <div className="card mb-3">
+              <div className="card-body">
+                <div className="d-flex justify-content-between align-items-center">
+                  <div>
+                    <h6 className="mb-1">
+                      <i className="bi bi-camera me-2" style={{ color: AppConstants.primaryColor }}></i>
+                      Add Photos
+                    </h6>
+                    <small className="text-muted">
+                      {getCurrentPhotoCount()}/{MAX_PHOTOS} photos uploaded. You can add {getRemainingPhotoCount()} more.
+                    </small>
+                  </div>
+                  <button
+                    className="btn btn-primary"
+                    onClick={handleAddPhotosClick}
+                    disabled={uploading}
+                    style={{
+                      borderRadius: '8px',
+                      padding: '10px 20px',
+                      fontWeight: '500'
+                    }}
+                  >
+                    {uploading ? (
+                      <>
+                        <span className="spinner-border spinner-border-sm me-2" role="status"></span>
+                        Uploading...
+                      </>
+                    ) : (
+                      <>
+                        <i className="bi bi-plus-circle me-2"></i>
+                        Add Photos
+                      </>
+                    )}
+                  </button>
+                </div>
               </div>
             </div>
-          </div>
+          )}
 
-          {/* Hidden File Inputs */}
-          <input
-            ref={cameraInputRef}
-            type="file"
-            accept="image/*"
-            capture="environment"
-            onChange={handleFileChange}
-            style={{ display: 'none' }}
-          />
+          {/* Photo Limit Reached Message */}
+          {!canAddMorePhotos() && (
+            <div className="alert alert-info mb-3">
+              <i className="bi bi-info-circle me-2"></i>
+              Maximum {MAX_PHOTOS} photos reached for this work order.
+            </div>
+          )}
+
+          {/* Hidden File Input */}
           <input
             ref={fileInputRef}
             type="file"
@@ -162,51 +276,190 @@ const WorkOrderPhotos = () => {
             multiple
             onChange={handleFileChange}
             style={{ display: 'none' }}
+            disabled={uploading || !canAddMorePhotos()}
           />
 
-          {/* Existing Photos */}
+          {/* Existing Photos as Thumbnails */}
           {workOrder?.images && workOrder.images.length > 0 ? (
             <div className="card">
               <div className="card-body">
-                <h6 className="mb-3">
-                  <i className="bi bi-images me-2" style={{ color: '#20c997' }}></i>
-                  Existing Photos ({workOrder.images.length})
-                </h6>
+                <div className="d-flex justify-content-between align-items-center mb-3">
+                  <h6 className="mb-0">
+                    <i className="bi bi-images me-2" style={{ color: '#20c997' }}></i>
+                    Photos ({workOrder.images.length}/{MAX_PHOTOS})
+                  </h6>
+                  <span className="badge bg-primary">
+                    {workOrder.images.length} {workOrder.images.length === 1 ? 'Photo' : 'Photos'}
+                  </span>
+                </div>
                 <div className="row g-3">
-                  {workOrder.images.map((image: any, index: number) => (
-                    <div key={index} className="col-6 col-md-4">
-                      <div className="position-relative">
-                        <img
-                          src={image.image_url || image.path || image.url || '#'}
-                          alt={`Photo ${index + 1}`}
-                          className="img-fluid rounded"
-                          style={{
-                            width: '100%',
-                            height: '200px',
-                            objectFit: 'cover',
-                            cursor: 'pointer'
-                          }}
-                          onClick={() => {
-                            // TODO: Open image in fullscreen/modal view
-                            window.open(image.image_url || image.path || image.url, '_blank');
-                          }}
-                        />
+                  {workOrder.images.map((image: any, index: number) => {
+                    const getImageUrl = () => {
+                      if (typeof image === 'string') {
+                        return image.startsWith('http') ? image : `${AppConstants.baseUrl}/${image.replace(/^\//, '')}`;
+                      }
+                      
+                      // Check if image_url is already available (from model accessor)
+                      if (image.image_url) {
+                        // If it's already a full URL, return it
+                        if (image.image_url.startsWith('http')) {
+                          return image.image_url;
+                        }
+                        // Otherwise prepend baseUrl
+                        return `${AppConstants.baseUrl}/${image.image_url.replace(/^\//, '')}`;
+                      }
+                      
+                      // Construct URL from image_path and image_name as fallback
+                      const imagePath = image.image_path || image.path;
+                      const imageName = image.image_name || image.name;
+                      
+                      if (imagePath && imageName) {
+                        return `${AppConstants.baseUrl}/storage/${imagePath}/${imageName}`;
+                      }
+                      
+                      // Final fallback to url or path
+                      const imgPath = image.url || image.path;
+                      if (!imgPath) return '';
+                      if (imgPath.startsWith('http')) return imgPath;
+                      
+                      return `${AppConstants.baseUrl}/${imgPath.replace(/^\//, '')}`;
+                    };
+                    const imageUrl = getImageUrl();
+                    if (!imageUrl) return null;
+                    const canDelete = canDeletePhoto(image);
+                    const isDeleting = deletingPhotoId === image.id;
+                    return (
+                      <div key={image.id || index} className="col-6 col-md-4 col-lg-3">
+                        <div className="position-relative">
+                          <img
+                            src={imageUrl}
+                            alt={`Work order photo ${index + 1}`}
+                            className="img-fluid rounded shadow-sm"
+                            style={{
+                              width: '100%',
+                              height: '150px',
+                              objectFit: 'cover',
+                              cursor: 'pointer',
+                              transition: 'transform 0.2s',
+                              opacity: isDeleting ? 0.5 : 1
+                            }}
+                            onClick={() => !isDeleting && window.open(imageUrl, '_blank')}
+                            onError={(e) => {
+                              const target = e.target as HTMLImageElement;
+                              target.src = '/assets/img/demo-img/default-image.jpg';
+                            }}
+                            onMouseEnter={(e) => {
+                              if (!isDeleting) {
+                                e.currentTarget.style.transform = 'scale(1.05)';
+                              }
+                            }}
+                            onMouseLeave={(e) => {
+                              e.currentTarget.style.transform = 'scale(1)';
+                            }}
+                          />
+                          <div 
+                            className="position-absolute top-0 end-0 m-2"
+                            style={{
+                              backgroundColor: 'rgba(0,0,0,0.6)',
+                              borderRadius: '50%',
+                              width: '30px',
+                              height: '30px',
+                              display: 'flex',
+                              alignItems: 'center',
+                              justifyContent: 'center',
+                              color: 'white',
+                              fontSize: '12px',
+                              fontWeight: 'bold'
+                            }}
+                          >
+                            {index + 1}
+                          </div>
+                          {canDelete && (
+                            <button
+                              className="btn btn-danger btn-sm position-absolute top-0 start-0 m-2"
+                              style={{
+                                borderRadius: '50%',
+                                width: '32px',
+                                height: '32px',
+                                padding: 0,
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyContent: 'center',
+                                border: '2px solid white',
+                                boxShadow: '0 2px 4px rgba(0,0,0,0.3)'
+                              }}
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                if (image.id && !isDeleting) {
+                                  handleDeletePhotoClick(image.id);
+                                }
+                              }}
+                              disabled={isDeleting}
+                              title="Delete photo"
+                            >
+                              {isDeleting ? (
+                                <span className="spinner-border spinner-border-sm" style={{ width: '14px', height: '14px' }}></span>
+                              ) : (
+                                <i className="bi bi-trash" style={{ fontSize: '14px' }}></i>
+                              )}
+                            </button>
+                          )}
+                          {image.creator && (
+                            <div 
+                              className="position-absolute bottom-0 start-0 m-2"
+                              style={{
+                                backgroundColor: 'rgba(0,0,0,0.7)',
+                                borderRadius: '4px',
+                                padding: '2px 6px',
+                                fontSize: '10px',
+                                color: 'white',
+                                maxWidth: 'calc(100% - 80px)',
+                                overflow: 'hidden',
+                                textOverflow: 'ellipsis',
+                                whiteSpace: 'nowrap'
+                              }}
+                              title={`Added by ${image.creator.name || image.creator.email || 'Unknown'}`}
+                            >
+                              {image.creator.name || image.creator.email || 'Unknown'}
+                            </div>
+                          )}
+                        </div>
                       </div>
-                    </div>
-                  ))}
+                    );
+                  })}
                 </div>
               </div>
             </div>
           ) : (
             <div className="card">
               <div className="card-body text-center py-5">
-                <i className="bi bi-image" style={{ fontSize: '48px', color: '#dee2e6' }}></i>
+                <i className="bi bi-images" style={{ fontSize: '48px', color: '#dee2e6' }}></i>
                 <p className="text-muted mt-3 mb-0">No photos added yet</p>
+                {canAddMorePhotos() && (
+                  <p className="text-muted small mb-0">Click "Add Photos" button above to add photos</p>
+                )}
               </div>
             </div>
           )}
         </div>
       </div>
+      
+      {/* Delete Photo Confirmation Modal */}
+      <ConfirmModal
+        show={showDeleteConfirm}
+        title="Delete Photo"
+        message="Are you sure you want to delete this photo? This action cannot be undone."
+        confirmText="Delete"
+        cancelText="Cancel"
+        confirmButtonVariant="danger"
+        onConfirm={handleDeletePhoto}
+        onCancel={() => {
+          setShowDeleteConfirm(false);
+          setPhotoToDelete(null);
+        }}
+        isProcessing={deletingPhotoId !== null}
+      />
+      
       <FooterTwo />
     </>
   );

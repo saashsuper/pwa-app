@@ -19,6 +19,9 @@ const HeaderTwo = () => {
 	const { user, logout } = useAuth();
 	const { theme, handleDarkModeToggle } = useDarkMode();
 
+	// Check if user is a contractor
+	const isContractor = user?.user_type?.name?.includes('Contractor') || false;
+
 	const handleLogout = async () => {
 		await logout();
 		navigate("/login");
@@ -111,11 +114,13 @@ const HeaderTwo = () => {
 								<i className="bi bi-clipboard-check"></i> Work Orders
 							</Link>
 						</li>
-						<li>
-							<Link to="/inspections">
-								<i className="bi bi-search"></i> Inspections
-							</Link>
-						</li>
+						{!isContractor && (
+							<li>
+								<Link to="/inspections">
+									<i className="bi bi-search"></i> Inspections
+								</Link>
+							</li>
+						)}
 						<li>
 							<Link to="/profile">
 								<i className="bi bi-person-circle"></i> Profile

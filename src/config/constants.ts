@@ -9,19 +9,19 @@ export const AppConstants = {
   // API Configuration
   apiUrl: API_URL,
   baseUrl: API_URL.replace('/mobile-api', ''),
-  
+
   // App Information
   appName: 'PROMAN',
   appSubtitle: 'Property Management',
-  
+
   // Colors (matching Flutter app)
   primaryColor: '#2196F3',
   secondaryColor: '#2196F3',
-  
+
   // Storage Keys
   tokenKey: 'auth_token',
   userKey: 'user_data',
-  
+
   // API Endpoints
   endpoints: {
     login: '/auth/login',
@@ -31,6 +31,7 @@ export const AppConstants = {
     workOrderDetail: '/work-orders',
     inspections: '/inspections/my-inspections',
     inspectionDetail: '/inspections',
+    blockIssueDetail: '/block-issues',
   }
 };
 

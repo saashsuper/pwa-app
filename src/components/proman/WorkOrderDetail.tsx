@@ -23,10 +23,8 @@ const WorkOrderDetail = () => {
   const completeSliderRef = useRef<HTMLDivElement>(null);
   
   // Modal states
-  const [showNotesModal, setShowNotesModal] = useState(false);
-  const [showTeamModal, setShowTeamModal] = useState(false);
-  const [notes, setNotes] = useState("");
-  const [savingNotes, setSavingNotes] = useState(false);
+  const [showPauseReasonModal, setShowPauseReasonModal] = useState(false);
+  const [pauseReason, setPauseReason] = useState("");
 
   useEffect(() => {
     if (id) {
@@ -68,21 +66,32 @@ const WorkOrderDetail = () => {
     }
   }, [workOrder, id, startingJob]);
 
-  const handlePauseJob = useCallback(async () => {
+  const handlePauseJobClick = useCallback(() => {
     if (!workOrder || !id || pausingJob) return;
+    setPauseReason("");
+    setShowPauseReasonModal(true);
+  }, [workOrder, id, pausingJob]);
+
+  const handlePauseJob = useCallback(async () => {
+    if (!workOrder || !id || pausingJob || !pauseReason.trim()) {
+      setError("Please provide a reason for pausing the job");
+      return;
+    }
 
     setPausingJob(true);
     setError("");
     
     try {
-      const updatedWorkOrder = await workOrderService.pauseWorkOrder(Number(id));
+      const updatedWorkOrder = await workOrderService.pauseWorkOrder(Number(id), pauseReason.trim());
       setWorkOrder(updatedWorkOrder);
+      setShowPauseReasonModal(false);
+      setPauseReason("");
     } catch (err: any) {
       setError(err.message || "Failed to pause work order");
     } finally {
       setPausingJob(false);
     }
-  }, [workOrder, id, pausingJob]);
+  }, [workOrder, id, pausingJob, pauseReason]);
 
   const handleResumeJob = useCallback(async () => {
     if (!workOrder || !id || resumingJob) return;
@@ -503,31 +512,6 @@ const WorkOrderDetail = () => {
   };
 
 
-  const handleAddNotes = async () => {
-    if (!notes.trim() || !id || savingNotes) return;
-
-    setSavingNotes(true);
-    setError("");
-    
-    try {
-      // TODO: Implement notes save API call
-      console.log('Saving notes:', notes);
-      setShowNotesModal(false);
-      setNotes("");
-      // After successful save, reload work order to show new notes
-      await loadWorkOrder();
-    } catch (err: any) {
-      setError(err.message || "Failed to save notes");
-    } finally {
-      setSavingNotes(false);
-    }
-  };
-
-  const openNotesModal = () => {
-    // Pre-fill with existing notes if any
-    setNotes(workOrder?.notes || "");
-    setShowNotesModal(true);
-  };
 
   if (loading) {
     return (
@@ -779,7 +763,7 @@ const WorkOrderDetail = () => {
                       <div className="mb-3">
                         <button
                           className="btn btn-warning w-100"
-                          onClick={handlePauseJob}
+                          onClick={handlePauseJobClick}
                           disabled={pausingJob}
                           style={{
                             borderRadius: '8px',
@@ -942,7 +926,7 @@ const WorkOrderDetail = () => {
             <div className="card mb-3">
               <div className="card-body">
                 <div className="row g-2">
-                  {/* Add Photo Button */}
+                  {/* View Photos Button */}
                   <div className="col-12">
                     <button
                       className="btn btn-outline-primary w-100 d-flex align-items-center justify-content-center"
@@ -954,16 +938,16 @@ const WorkOrderDetail = () => {
                         fontWeight: '500'
                       }}
                     >
-                      <i className="bi bi-camera me-2" style={{ fontSize: '20px' }}></i>
-                      Add Photo
+                      <i className="bi bi-images me-2" style={{ fontSize: '20px' }}></i>
+                      View Photos
                     </button>
                   </div>
 
-                  {/* Add Notes Button */}
+                  {/* View Notes Button */}
                   <div className="col-12">
                     <button
                       className="btn btn-outline-info w-100 d-flex align-items-center justify-content-center"
-                      onClick={openNotesModal}
+                      onClick={() => navigate(`/work-order/${id}/notes`)}
                       style={{
                         borderRadius: '8px',
                         padding: '12px',
@@ -971,8 +955,8 @@ const WorkOrderDetail = () => {
                         fontWeight: '500'
                       }}
                     >
-                      <i className="bi bi-pencil-square me-2" style={{ fontSize: '20px' }}></i>
-                      Add Notes
+                      <i className="bi bi-journal-text me-2" style={{ fontSize: '20px' }}></i>
+                      View Notes
                     </button>
                   </div>
 
@@ -980,7 +964,7 @@ const WorkOrderDetail = () => {
                   <div className="col-12">
                     <button
                       className="btn btn-outline-success w-100 d-flex align-items-center justify-content-center"
-                      onClick={() => setShowTeamModal(true)}
+                      onClick={() => navigate(`/work-order/${id}/team`)}
                       style={{
                         borderRadius: '8px',
                         padding: '12px',
@@ -1107,52 +1091,27 @@ const WorkOrderDetail = () => {
                         <div>{workOrder.block_issue.issue}</div>
                       </div>
                     )}
-                    {workOrder.block_issue.ref_no && (
+                    {workOrder.block_issue.ref_no && workOrder.block_issue.id && (
+                      <div className="col-6">
+                        <small className="text-muted d-block mb-1">Issue Reference</small>
+                        <div className="fw-bold">
+                          <Link 
+                            to={`/issue/${workOrder.block_issue.id}`}
+                            className="text-decoration-none"
+                            style={{ color: AppConstants.primaryColor, cursor: 'pointer' }}
+                          >
+                            {workOrder.block_issue.ref_no}
+                            <i className="bi bi-arrow-right ms-2" style={{ fontSize: '12px' }}></i>
+                          </Link>
+                        </div>
+                      </div>
+                    )}
+                    {workOrder.block_issue.ref_no && !workOrder.block_issue.id && (
                       <div className="col-6">
                         <small className="text-muted d-block mb-1">Issue Reference</small>
                         <div className="fw-bold">{workOrder.block_issue.ref_no}</div>
                       </div>
                     )}
-                  </div>
-                </div>
-              </div>
-            )}
-
-            {/* Images */}
-            {workOrder.images && workOrder.images.length > 0 && (
-              <div className="card mb-3">
-                <div className="card-body">
-                  <h6 className="mb-3">
-                    <i className="bi bi-images me-2" style={{ color: '#20c997' }}></i>
-                    Images ({workOrder.images.length})
-                  </h6>
-                  <div className="row g-2">
-                    {workOrder.images.map((image: any, index: number) => {
-                      const getImageUrl = () => {
-                        if (typeof image === 'string') {
-                          return image.startsWith('http') ? image : `${AppConstants.baseUrl}/${image.replace(/^\//, '')}`;
-                        }
-                        const imgPath = image.image_path || image.url || image.path;
-                        if (!imgPath) return '';
-                        return imgPath.startsWith('http') ? imgPath : `${AppConstants.baseUrl}/${imgPath.replace(/^\//, '')}`;
-                      };
-                      const imageUrl = getImageUrl();
-                      return (
-                        <div key={index} className="col-6 col-md-4">
-                          <img
-                            src={imageUrl}
-                            alt={`Work order image ${index + 1}`}
-                            className="img-fluid rounded"
-                            style={{ width: '100%', height: '150px', objectFit: 'cover', cursor: 'pointer' }}
-                            onClick={() => window.open(imageUrl, '_blank')}
-                            onError={(e) => {
-                              const target = e.target as HTMLImageElement;
-                              target.src = '/assets/img/demo-img/default-image.jpg';
-                            }}
-                          />
-                        </div>
-                      );
-                    })}
                   </div>
                 </div>
               </div>
@@ -1250,124 +1209,88 @@ const WorkOrderDetail = () => {
       <FooterTwo />
 
 
-      {/* Add Notes Modal */}
-      {showNotesModal && (
+      {/* Pause Reason Modal */}
+      {showPauseReasonModal && (
         <div className="modal fade show" style={{ display: 'block', backgroundColor: 'rgba(0,0,0,0.5)' }} tabIndex={-1}>
           <div className="modal-dialog modal-dialog-centered">
             <div className="modal-content">
               <div className="modal-header">
                 <h5 className="modal-title">
-                  <i className="bi bi-pencil-square me-2"></i>
-                  Add Notes
+                  <i className="bi bi-pause-circle me-2" style={{ color: '#ffc107' }}></i>
+                  Pause Job - Reason Required
                 </h5>
                 <button
                   type="button"
                   className="btn-close"
-                  onClick={() => setShowNotesModal(false)}
+                  onClick={() => {
+                    setShowPauseReasonModal(false);
+                    setPauseReason("");
+                    setError("");
+                  }}
                   aria-label="Close"
                 ></button>
               </div>
               <div className="modal-body">
-                <textarea
-                  className="form-control"
-                  rows={6}
-                  placeholder="Enter your notes here..."
-                  value={notes}
-                  onChange={(e) => setNotes(e.target.value)}
-                  style={{ borderRadius: '8px' }}
-                  disabled={savingNotes}
-                ></textarea>
+                {error && (
+                  <div className="alert alert-danger alert-dismissible fade show" role="alert">
+                    {error}
+                    <button
+                      type="button"
+                      className="btn-close"
+                      onClick={() => setError("")}
+                      aria-label="Close"
+                    ></button>
+                  </div>
+                )}
+                <p className="mb-3">Please provide a reason for pausing this job:</p>
+                <div className="mb-3">
+                  <label htmlFor="pauseReason" className="form-label">Reason *</label>
+                  <textarea
+                    id="pauseReason"
+                    className="form-control"
+                    rows={4}
+                    placeholder="Enter the reason for pausing the job..."
+                    value={pauseReason}
+                    onChange={(e) => setPauseReason(e.target.value)}
+                    maxLength={1000}
+                    style={{ resize: 'vertical' }}
+                  />
+                  <small className="text-muted">
+                    {pauseReason.length}/1000 characters
+                  </small>
+                </div>
               </div>
               <div className="modal-footer">
                 <button
                   type="button"
                   className="btn btn-secondary"
                   onClick={() => {
-                    setShowNotesModal(false);
-                    setNotes("");
+                    setShowPauseReasonModal(false);
+                    setPauseReason("");
+                    setError("");
                   }}
-                  disabled={savingNotes}
-                  style={{ borderRadius: '8px' }}
+                  disabled={pausingJob}
                 >
                   Cancel
                 </button>
                 <button
                   type="button"
-                  className="btn btn-primary"
-                  onClick={handleAddNotes}
-                  disabled={savingNotes || !notes.trim()}
-                  style={{ borderRadius: '8px' }}
+                  className="btn btn-warning"
+                  onClick={handlePauseJob}
+                  disabled={pausingJob || !pauseReason.trim()}
                 >
-                  {savingNotes ? (
+                  {pausingJob ? (
                     <>
                       <span className="spinner-border spinner-border-sm me-2" role="status"></span>
-                      Saving...
+                      Pausing...
                     </>
                   ) : (
-                    'Save Notes'
+                    <>
+                      <i className="bi bi-pause-circle me-2"></i>
+                      Pause Job
+                    </>
                   )}
                 </button>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* View My Team Modal */}
-      {showTeamModal && (
-        <div className="modal fade show" style={{ display: 'block', backgroundColor: 'rgba(0,0,0,0.5)' }} tabIndex={-1}>
-          <div className="modal-dialog modal-dialog-centered modal-lg">
-            <div className="modal-content">
-              <div className="modal-header">
-                <h5 className="modal-title">
-                  <i className="bi bi-people me-2"></i>
-                  My Team
-                </h5>
-                <button
-                  type="button"
-                  className="btn-close"
-                  onClick={() => setShowTeamModal(false)}
-                  aria-label="Close"
-                ></button>
-              </div>
-              <div className="modal-body">
-                {workOrder?.contractor ? (
-                  <div className="card border-0 bg-light">
-                    <div className="card-body">
-                      <h6 className="mb-3">
-                        <i className="bi bi-person-badge me-2"></i>
-                        Assigned Contractor
-                      </h6>
-                      <div className="d-flex align-items-center">
-                        {workOrder.contractor.avatar && (
-                          <img
-                            src={workOrder.contractor.avatar}
-                            alt={workOrder.contractor.name}
-                            className="rounded-circle me-3"
-                            style={{ width: '60px', height: '60px', objectFit: 'cover' }}
-                          />
-                        )}
-                        <div>
-                          <div className="fw-bold">{workOrder.contractor.name || 'N/A'}</div>
-                          {workOrder.contractor.email && (
-                            <small className="text-muted d-block">{workOrder.contractor.email}</small>
-                          )}
-                          {workOrder.contractor.phone && (
-                            <small className="text-muted d-block">
-                              <i className="bi bi-telephone me-1"></i>
-                              {workOrder.contractor.phone}
-                            </small>
-                          )}
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                ) : (
-                  <div className="text-center py-4">
-                    <i className="bi bi-people" style={{ fontSize: '48px', color: '#dee2e6' }}></i>
-                    <p className="text-muted mt-3 mb-0">No team members assigned to this work order</p>
-                  </div>
-                )}
               </div>
             </div>
           </div>

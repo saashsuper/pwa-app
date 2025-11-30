@@ -4,10 +4,13 @@ import { useAuth } from "../../contexts/AuthContext";
 import HeaderTwo from "../../layouts/headers/HeaderTwo";
 import FooterTwo from "../../layouts/footers/FooterTwo";
 import AppConstants from "../../config/constants";
+import ConfirmModal from "../common/ConfirmModal";
 
 const ProfileProman = () => {
   const { user, logout, refreshUser, loading: authLoading } = useAuth();
   const [refreshing, setRefreshing] = useState(false);
+  const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
+  const [loggingOut, setLoggingOut] = useState(false);
   const navigate = useNavigate();
 
   const handleRefresh = async () => {
@@ -19,10 +22,19 @@ const ProfileProman = () => {
     }
   };
 
+  const handleLogoutClick = () => {
+    setShowLogoutConfirm(true);
+  };
+
   const handleLogout = async () => {
-    if (confirm("Are you sure you want to logout?")) {
+    setLoggingOut(true);
+    setShowLogoutConfirm(false);
+    try {
       await logout();
       navigate("/login");
+    } catch (error) {
+      console.error("Logout error:", error);
+      setLoggingOut(false);
     }
   };
 
@@ -307,10 +319,20 @@ const ProfileProman = () => {
               <div className="card-body">
                 <button
                   className="btn btn-outline-danger w-100"
-                  onClick={handleLogout}
+                  onClick={handleLogoutClick}
+                  disabled={loggingOut}
                 >
-                  <i className="bi bi-box-arrow-right me-2"></i>
-                  Logout
+                  {loggingOut ? (
+                    <>
+                      <span className="spinner-border spinner-border-sm me-2" role="status"></span>
+                      Logging out...
+                    </>
+                  ) : (
+                    <>
+                      <i className="bi bi-box-arrow-right me-2"></i>
+                      Logout
+                    </>
+                  )}
                 </button>
               </div>
             </div>
@@ -319,6 +341,20 @@ const ProfileProman = () => {
           </div>
         </div>
       </div>
+      
+      {/* Logout Confirmation Modal */}
+      <ConfirmModal
+        show={showLogoutConfirm}
+        title="Logout"
+        message="Are you sure you want to logout?"
+        confirmText="Logout"
+        cancelText="Cancel"
+        confirmButtonVariant="danger"
+        onConfirm={handleLogout}
+        onCancel={() => setShowLogoutConfirm(false)}
+        isProcessing={loggingOut}
+      />
+      
       <FooterTwo />
     </>
   );

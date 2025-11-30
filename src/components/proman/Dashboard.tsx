@@ -6,6 +6,9 @@ import AppConstants from "../../config/constants";
 
 const Dashboard = () => {
   const { user } = useAuth();
+  
+  // Check if user is a contractor
+  const isContractor = user?.user_type?.name?.includes('Contractor') || false;
 
   return (
     <>
@@ -34,7 +37,7 @@ const Dashboard = () => {
 
             {/* Quick Stats Cards */}
             <div className="row g-3 mt-4">
-              <div className="col-6">
+              <div className={isContractor ? "col-12" : "col-6"}>
                 <Link to="/work-orders" className="text-decoration-none">
                   <div 
                     className="card shadow-sm" 
@@ -60,31 +63,33 @@ const Dashboard = () => {
                 </Link>
               </div>
               
-              <div className="col-6">
-                <Link to="/inspections" className="text-decoration-none">
-                  <div 
-                    className="card shadow-sm" 
-                    style={{ 
-                      cursor: 'pointer', 
-                      transition: 'all 0.2s ease-in-out'
-                    }}
-                    onMouseEnter={(e) => {
-                      e.currentTarget.style.transform = 'translateY(-2px)';
-                      e.currentTarget.style.boxShadow = '0 4px 8px rgba(0,0,0,0.15)';
-                    }}
-                    onMouseLeave={(e) => {
-                      e.currentTarget.style.transform = 'translateY(0)';
-                      e.currentTarget.style.boxShadow = '';
-                    }}
-                  >
-                    <div className="card-body text-center">
-                      <i className="bi bi-search mb-2" style={{ fontSize: '32px', color: '#28a745' }}></i>
-                      <h6 className="mb-1">Inspections</h6>
-                      <p className="mb-0 text-muted small">Track Progress</p>
+              {!isContractor && (
+                <div className="col-6">
+                  <Link to="/inspections" className="text-decoration-none">
+                    <div 
+                      className="card shadow-sm" 
+                      style={{ 
+                        cursor: 'pointer', 
+                        transition: 'all 0.2s ease-in-out'
+                      }}
+                      onMouseEnter={(e) => {
+                        e.currentTarget.style.transform = 'translateY(-2px)';
+                        e.currentTarget.style.boxShadow = '0 4px 8px rgba(0,0,0,0.15)';
+                      }}
+                      onMouseLeave={(e) => {
+                        e.currentTarget.style.transform = 'translateY(0)';
+                        e.currentTarget.style.boxShadow = '';
+                      }}
+                    >
+                      <div className="card-body text-center">
+                        <i className="bi bi-search mb-2" style={{ fontSize: '32px', color: '#28a745' }}></i>
+                        <h6 className="mb-1">Inspections</h6>
+                        <p className="mb-0 text-muted small">Track Progress</p>
+                      </div>
                     </div>
-                  </div>
-                </Link>
-              </div>
+                  </Link>
+                </div>
+              )}
             </div>
 
             {/* Quick Actions */}
@@ -104,14 +109,16 @@ const Dashboard = () => {
                     <i className="bi bi-chevron-right"></i>
                   </a>
                   
-                  <a href="/inspections" className="list-group-item list-group-item-action d-flex align-items-center">
-                    <i className="bi bi-clipboard-check me-3" style={{ fontSize: '20px', color: '#28a745' }}></i>
-                    <div className="flex-grow-1">
-                      <div className="fw-bold">My Inspections</div>
-                      <small className="text-muted">View inspection tasks</small>
-                    </div>
-                    <i className="bi bi-chevron-right"></i>
-                  </a>
+                  {!isContractor && (
+                    <a href="/inspections" className="list-group-item list-group-item-action d-flex align-items-center">
+                      <i className="bi bi-clipboard-check me-3" style={{ fontSize: '20px', color: '#28a745' }}></i>
+                      <div className="flex-grow-1">
+                        <div className="fw-bold">My Inspections</div>
+                        <small className="text-muted">View inspection tasks</small>
+                      </div>
+                      <i className="bi bi-chevron-right"></i>
+                    </a>
+                  )}
                   
                   <a href="/user-profile" className="list-group-item list-group-item-action d-flex align-items-center">
                     <i className="bi bi-person-circle me-3" style={{ fontSize: '20px', color: '#6f42c1' }}></i>
