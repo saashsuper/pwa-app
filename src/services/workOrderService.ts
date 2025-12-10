@@ -18,6 +18,7 @@ export interface WorkOrder {
     id: number;
     name: string;
   };
+  acceptance_status?: 'pending' | 'accepted' | 'rejected';
   priority?: {
     id: number;
     label?: string;
@@ -158,6 +159,63 @@ class WorkOrderService {
     } catch (error: any) {
       console.error('Get work order details error:', error);
       throw new Error(error.response?.data?.message || error.message || 'Failed to load work order details');
+    }
+  }
+
+  /**
+   * Accept work order
+   */
+  async acceptWorkOrder(id: number): Promise<WorkOrder> {
+    try {
+      const response = await api.post<{ success: boolean; message: string; data: WorkOrder }>(
+        `${AppConstants.endpoints.workOrderDetail}/${id}/accept`
+      );
+
+      if (response.status === 401) {
+        throw new Error('Authentication failed - please login again');
+      }
+
+      if (response.status === 404) {
+        throw new Error('Work order not found');
+      }
+
+      if (!response.data.success) {
+        throw new Error(response.data.message || 'Failed to accept work order');
+      }
+
+      return response.data.data;
+    } catch (error: any) {
+      console.error('Accept work order error:', error);
+      throw new Error(error.response?.data?.message || error.message || 'Failed to accept work order');
+    }
+  }
+
+  /**
+   * Reject work order
+   */
+  async rejectWorkOrder(id: number, reason: string): Promise<WorkOrder> {
+    try {
+      const response = await api.post<{ success: boolean; message: string; data: WorkOrder }>(
+        `${AppConstants.endpoints.workOrderDetail}/${id}/reject`,
+        { reason }
+      );
+
+      if (response.status === 401) {
+        throw new Error('Authentication failed - please login again');
+      }
+
+      if (response.status === 404) {
+        throw new Error('Work order not found');
+      }
+
+      if (!response.data.success) {
+        throw new Error(response.data.message || 'Failed to reject work order');
+      }
+
+      return response.data.data;
+    } catch (error: any) {
+      console.error('Reject work order error:', error);
+      throw new Error(error.response?.data?.message || error.message || 'Failed to reject work order');
     }
   }
 

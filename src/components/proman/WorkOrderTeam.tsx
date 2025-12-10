@@ -187,12 +187,85 @@ const WorkOrderTeam = () => {
 
   const canRemoveMember = (member: TeamMember): boolean => {
     if (!canManageTeam()) return false;
-    // Cannot remove the primary contractor or admin (is_lead or string IDs)
-    if (member.is_lead) return false;
+    // Contractor admin can always remove themselves (even if they're in team table)
+    if (member.user.id === user?.id && typeof member.id === 'number') return true;
+    // Cannot remove the primary contractor or admin (is_lead or string IDs) unless it's the current user
+    if (member.is_lead && member.user.id !== user?.id) return false;
     if (typeof member.id === 'string') return false; // Contractor and admin have string IDs
     // Can only remove members from same contract company
     // (This will be checked on backend)
     return true;
+  };
+
+  const isCurrentUserInTeam = (): boolean => {
+    if (!user) return false;
+    // Check if user is in team (either as contractor/admin or in team table)
+    return teamMembers.some(member => member.user.id === user.id);
+  };
+
+  const getCurrentUserTeamMember = (): TeamMember | null => {
+    if (!user) return null;
+    return teamMembers.find(member => member.user.id === user.id) || null;
+  };
+
+  const isCurrentUserInTeamTable = (): boolean => {
+    if (!user) return false;
+    const currentMember = getCurrentUserTeamMember();
+    // User is in team table if they have a numeric ID (not string like 'contractor-123' or 'admin-456')
+    return currentMember !== null && typeof currentMember.id === 'number';
+  };
+
+  const handleToggleCurrentUser = async () => {
+    if (!id || !user || addingMemberId !== null || removingMemberId !== null) return;
+    
+    const isInTeam = isCurrentUserInTeam();
+    const currentMember = getCurrentUserTeamMember();
+    const isInTeamTable = isCurrentUserInTeamTable();
+    
+    if (isInTeam && isInTeamTable && currentMember) {
+      // Remove current user from team table (they have numeric ID)
+      setMemberToRemove(currentMember.id as number);
+      setShowRemoveConfirm(true);
+    } else if (isInTeam && !isInTeamTable) {
+      // Current user is contractor/admin (string ID) but not in team table
+      // Add them to team table
+      setAddingMemberId(user.id);
+      setError("");
+      
+      try {
+        const response = await api.post<{ success: boolean; message: string; data: TeamMember[] }>(
+          `${AppConstants.endpoints.workOrderDetail}/${id}/team`,
+          { user_id: user.id }
+        );
+        
+        if (response.data.success) {
+          setTeamMembers(response.data.data);
+        }
+      } catch (err: any) {
+        setError(err.response?.data?.message || "Failed to add yourself to team");
+      } finally {
+        setAddingMemberId(null);
+      }
+    } else {
+      // Add current user to team
+      setAddingMemberId(user.id);
+      setError("");
+      
+      try {
+        const response = await api.post<{ success: boolean; message: string; data: TeamMember[] }>(
+          `${AppConstants.endpoints.workOrderDetail}/${id}/team`,
+          { user_id: user.id }
+        );
+        
+        if (response.data.success) {
+          setTeamMembers(response.data.data);
+        }
+      } catch (err: any) {
+        setError(err.response?.data?.message || "Failed to add yourself to team");
+      } finally {
+        setAddingMemberId(null);
+      }
+    }
   };
 
   if (loading) {
@@ -291,6 +364,99 @@ const WorkOrderTeam = () => {
                   onClick={() => setError("")}
                   aria-label="Close"
                 ></button>
+              </div>
+            )}
+
+            {/* Current User Toggle - Always show for Contractor Admin */}
+            {canManageTeam() && user && (
+              <div className="card mb-3">
+                <div className="card-body">
+                  <h6 className="mb-3">
+                    <i className="bi bi-person me-2" style={{ color: AppConstants.primaryColor }}></i>
+                    My Status
+                  </h6>
+                  <div className="d-flex align-items-center justify-content-between p-3" style={{ 
+                    backgroundColor: '#f8f9fa', 
+                    borderRadius: '8px',
+                    border: '2px solid #e9ecef'
+                  }}>
+                    <div className="d-flex align-items-center">
+                      {user.avatar ? (
+                        <img
+                          src={user.avatar}
+                          alt={user.name || user.email}
+                          className="rounded-circle me-3"
+                          style={{ width: '50px', height: '50px', objectFit: 'cover' }}
+                          onError={(e) => {
+                            const target = e.target as HTMLImageElement;
+                            target.style.display = 'none';
+                          }}
+                        />
+                      ) : (
+                        <div
+                          className="rounded-circle me-3 d-flex align-items-center justify-content-center text-white"
+                          style={{
+                            width: '50px',
+                            height: '50px',
+                            backgroundColor: AppConstants.primaryColor,
+                            fontSize: '18px',
+                            fontWeight: 'bold'
+                          }}
+                        >
+                          {(user.name || user.email || '?')[0].toUpperCase()}
+                        </div>
+                      )}
+                      <div>
+                        <div className="fw-bold">{user.name || user.email || 'Unknown'}</div>
+                        <small className="text-muted">
+                          {isCurrentUserInTeamTable() ? (
+                            <span className="text-success">
+                              <i className="bi bi-check-circle me-1"></i>
+                              In Team
+                            </span>
+                          ) : isCurrentUserInTeam() ? (
+                            <span className="text-info">
+                              <i className="bi bi-info-circle me-1"></i>
+                              Primary Contractor/Admin
+                            </span>
+                          ) : (
+                            <span className="text-muted">
+                              <i className="bi bi-circle me-1"></i>
+                              Not in Team
+                            </span>
+                          )}
+                        </small>
+                      </div>
+                    </div>
+                    <div className="form-check form-switch">
+                      <input
+                        className="form-check-input"
+                        type="checkbox"
+                        role="switch"
+                        id="currentUserToggle"
+                        checked={isCurrentUserInTeamTable()}
+                        onChange={handleToggleCurrentUser}
+                        disabled={addingMemberId !== null || removingMemberId !== null}
+                        style={{
+                          width: '3rem',
+                          height: '1.5rem',
+                          cursor: (addingMemberId !== null || removingMemberId !== null) ? 'not-allowed' : 'pointer'
+                        }}
+                      />
+                      <label className="form-check-label ms-2" htmlFor="currentUserToggle" style={{ cursor: 'pointer' }}>
+                        {isCurrentUserInTeamTable() ? 'Remove' : 'Add'}
+                      </label>
+                    </div>
+                  </div>
+                  {(addingMemberId === user.id || (removingMemberId !== null && memberToRemove !== null)) && (
+                    <div className="text-center mt-2">
+                      <span className="spinner-border spinner-border-sm text-primary me-2"></span>
+                      <small className="text-muted">
+                        {addingMemberId === user.id ? 'Adding to team...' : 'Removing from team...'}
+                      </small>
+                    </div>
+                  )}
+                </div>
               </div>
             )}
 

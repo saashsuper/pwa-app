@@ -21,10 +21,14 @@ const WorkOrderDetail = () => {
   const [completeSlideOffset, setCompleteSlideOffset] = useState(0);
   const [isDraggingComplete, setIsDraggingComplete] = useState(false);
   const completeSliderRef = useRef<HTMLDivElement>(null);
+  const [acceptingJob, setAcceptingJob] = useState(false);
+  const [rejectingJob, setRejectingJob] = useState(false);
   
   // Modal states
   const [showPauseReasonModal, setShowPauseReasonModal] = useState(false);
   const [pauseReason, setPauseReason] = useState("");
+  const [showRejectReasonModal, setShowRejectReasonModal] = useState(false);
+  const [rejectReason, setRejectReason] = useState("");
 
   useEffect(() => {
     if (id) {
@@ -124,6 +128,49 @@ const WorkOrderDetail = () => {
       setCompleteSlideOffset(0);
     }
   }, [workOrder, id, completingJob]);
+
+  const handleAcceptJob = useCallback(async () => {
+    if (!workOrder || !id || acceptingJob) return;
+
+    setAcceptingJob(true);
+    setError("");
+    
+    try {
+      const updatedWorkOrder = await workOrderService.acceptWorkOrder(Number(id));
+      setWorkOrder(updatedWorkOrder);
+    } catch (err: any) {
+      setError(err.message || "Failed to accept work order");
+    } finally {
+      setAcceptingJob(false);
+    }
+  }, [workOrder, id, acceptingJob]);
+
+  const handleRejectJobClick = useCallback(() => {
+    if (!workOrder || !id || rejectingJob) return;
+    setRejectReason("");
+    setShowRejectReasonModal(true);
+  }, [workOrder, id, rejectingJob]);
+
+  const handleRejectJob = useCallback(async () => {
+    if (!workOrder || !id || rejectingJob || !rejectReason.trim()) {
+      setError("Please provide a reason for rejecting the job");
+      return;
+    }
+
+    setRejectingJob(true);
+    setError("");
+    
+    try {
+      const updatedWorkOrder = await workOrderService.rejectWorkOrder(Number(id), rejectReason.trim());
+      setWorkOrder(updatedWorkOrder);
+      setShowRejectReasonModal(false);
+      setRejectReason("");
+    } catch (err: any) {
+      setError(err.message || "Failed to reject work order");
+    } finally {
+      setRejectingJob(false);
+    }
+  }, [workOrder, id, rejectingJob, rejectReason]);
 
   const handleDrag = useCallback((clientX: number) => {
     if (startingJob || !sliderRef.current) return;
@@ -460,6 +507,22 @@ const WorkOrderDetail = () => {
             workOrder.job_status.name.toLowerCase() === 'scheduled');
   };
 
+  const needsAcceptance = (): boolean => {
+    if (!workOrder) return false;
+    // Job needs acceptance if acceptance_status is 'pending' or null/undefined
+    return !workOrder.acceptance_status || workOrder.acceptance_status === 'pending';
+  };
+
+  const isAccepted = (): boolean => {
+    if (!workOrder) return false;
+    return workOrder.acceptance_status === 'accepted';
+  };
+
+  const isRejected = (): boolean => {
+    if (!workOrder) return false;
+    return workOrder.acceptance_status === 'rejected';
+  };
+
   const isInProgress = (): boolean => {
     if (!workOrder) return false;
     
@@ -628,8 +691,74 @@ const WorkOrderDetail = () => {
                   )}
                 </div>
                 
-                {/* Start Job iPhone-Style Slider - Show only for scheduled/pending work orders */}
-                {isScheduledOrPending() && (
+                {/* Accept/Reject Job Section - Show only when job needs acceptance */}
+                {isScheduledOrPending() && needsAcceptance() && (
+                  <div className="mt-4 pt-3 border-top">
+                    <div className="text-center mb-3">
+                      <h6 className="mb-2">
+                        <i className="bi bi-question-circle me-2" style={{ color: AppConstants.primaryColor }}></i>
+                        Accept or Reject this Job?
+                      </h6>
+                      <p className="text-muted small mb-0">
+                        Please accept or reject this work order before starting the job.
+                      </p>
+                    </div>
+                    <div className="row g-2">
+                      <div className="col-6">
+                        <button
+                          className="btn btn-success w-100"
+                          onClick={handleAcceptJob}
+                          disabled={acceptingJob || rejectingJob}
+                          style={{
+                            borderRadius: '8px',
+                            padding: '12px',
+                            fontSize: '16px',
+                            fontWeight: '600',
+                            boxShadow: '0 2px 8px rgba(40, 167, 69, 0.3)'
+                          }}
+                        >
+                          {acceptingJob ? (
+                            <>
+                              <span className="spinner-border spinner-border-sm me-2" role="status"></span>
+                              Accepting...
+                            </>
+                          ) : (
+                            <>
+                              <i className="bi bi-check-circle me-2"></i>
+                              Accept Job
+                            </>
+                          )}
+                        </button>
+                      </div>
+                      <div className="col-6">
+                        <button
+                          className="btn btn-danger w-100"
+                          onClick={handleRejectJobClick}
+                          disabled={acceptingJob || rejectingJob}
+                          style={{
+                            borderRadius: '8px',
+                            padding: '12px',
+                            fontSize: '16px',
+                            fontWeight: '600',
+                            boxShadow: '0 2px 8px rgba(220, 53, 69, 0.3)'
+                          }}
+                        >
+                          <i className="bi bi-x-circle me-2"></i>
+                          Reject Job
+                        </button>
+                      </div>
+                    </div>
+                    {isRejected() && (
+                      <div className="alert alert-warning mt-3 mb-0" role="alert">
+                        <i className="bi bi-exclamation-triangle me-2"></i>
+                        This work order has been rejected and cannot be started.
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {/* Start Job iPhone-Style Slider - Show only for scheduled/pending work orders that have been accepted */}
+                {isScheduledOrPending() && isAccepted() && (
                   <div className="mt-4 pt-3 border-top">
                     <div
                       ref={sliderRef}
@@ -1288,6 +1417,94 @@ const WorkOrderDetail = () => {
                     <>
                       <i className="bi bi-pause-circle me-2"></i>
                       Pause Job
+                    </>
+                  )}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Reject Reason Modal */}
+      {showRejectReasonModal && (
+        <div className="modal fade show" style={{ display: 'block', backgroundColor: 'rgba(0,0,0,0.5)' }} tabIndex={-1}>
+          <div className="modal-dialog modal-dialog-centered">
+            <div className="modal-content">
+              <div className="modal-header">
+                <h5 className="modal-title">
+                  <i className="bi bi-x-circle me-2" style={{ color: '#dc3545' }}></i>
+                  Reject Job - Reason Required
+                </h5>
+                <button
+                  type="button"
+                  className="btn-close"
+                  onClick={() => {
+                    setShowRejectReasonModal(false);
+                    setRejectReason("");
+                    setError("");
+                  }}
+                  aria-label="Close"
+                ></button>
+              </div>
+              <div className="modal-body">
+                {error && (
+                  <div className="alert alert-danger alert-dismissible fade show" role="alert">
+                    {error}
+                    <button
+                      type="button"
+                      className="btn-close"
+                      onClick={() => setError("")}
+                      aria-label="Close"
+                    ></button>
+                  </div>
+                )}
+                <p className="mb-3">Please provide a reason for rejecting this job:</p>
+                <div className="mb-3">
+                  <label htmlFor="rejectReason" className="form-label">Reason *</label>
+                  <textarea
+                    id="rejectReason"
+                    className="form-control"
+                    rows={4}
+                    placeholder="Enter the reason for rejecting the job..."
+                    value={rejectReason}
+                    onChange={(e) => setRejectReason(e.target.value)}
+                    maxLength={1000}
+                    style={{ resize: 'vertical' }}
+                  />
+                  <small className="text-muted">
+                    {rejectReason.length}/1000 characters
+                  </small>
+                </div>
+              </div>
+              <div className="modal-footer">
+                <button
+                  type="button"
+                  className="btn btn-secondary"
+                  onClick={() => {
+                    setShowRejectReasonModal(false);
+                    setRejectReason("");
+                    setError("");
+                  }}
+                  disabled={rejectingJob}
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  className="btn btn-danger"
+                  onClick={handleRejectJob}
+                  disabled={rejectingJob || !rejectReason.trim()}
+                >
+                  {rejectingJob ? (
+                    <>
+                      <span className="spinner-border spinner-border-sm me-2" role="status"></span>
+                      Rejecting...
+                    </>
+                  ) : (
+                    <>
+                      <i className="bi bi-x-circle me-2"></i>
+                      Reject Job
                     </>
                   )}
                 </button>

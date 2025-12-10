@@ -20,7 +20,9 @@ const WorkOrderPhotos = () => {
   const [deletingPhotoId, setDeletingPhotoId] = useState<number | null>(null);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [photoToDelete, setPhotoToDelete] = useState<number | null>(null);
+  const [showPhotoSourceModal, setShowPhotoSourceModal] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const cameraInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     if (id) {
@@ -42,8 +44,20 @@ const WorkOrderPhotos = () => {
   };
 
   const handleAddPhotosClick = () => {
+    setShowPhotoSourceModal(true);
+  };
+
+  const handleGalleryClick = () => {
+    setShowPhotoSourceModal(false);
     if (fileInputRef.current) {
       fileInputRef.current.click();
+    }
+  };
+
+  const handleCameraClick = () => {
+    setShowPhotoSourceModal(false);
+    if (cameraInputRef.current) {
+      cameraInputRef.current.click();
     }
   };
 
@@ -59,9 +73,12 @@ const WorkOrderPhotos = () => {
     if (totalPhotos > MAX_PHOTOS) {
       const allowed = MAX_PHOTOS - currentPhotoCount;
       setError(`Maximum ${MAX_PHOTOS} photos allowed. You can add ${allowed} more photo(s).`);
-      // Reset file input
+      // Reset file inputs
       if (fileInputRef.current) {
         fileInputRef.current.value = '';
+      }
+      if (cameraInputRef.current) {
+        cameraInputRef.current.value = '';
       }
       return;
     }
@@ -73,15 +90,21 @@ const WorkOrderPhotos = () => {
       const updatedWorkOrder = await workOrderService.uploadPhotos(Number(id), fileArray);
       setWorkOrder(updatedWorkOrder);
       
-      // Reset file input
+      // Reset file inputs
       if (fileInputRef.current) {
         fileInputRef.current.value = '';
       }
+      if (cameraInputRef.current) {
+        cameraInputRef.current.value = '';
+      }
     } catch (err: any) {
       setError(err.message || "Failed to upload photos");
-      // Reset file input on error
+      // Reset file inputs on error
       if (fileInputRef.current) {
         fileInputRef.current.value = '';
+      }
+      if (cameraInputRef.current) {
+        cameraInputRef.current.value = '';
       }
     } finally {
       setUploading(false);
@@ -268,11 +291,23 @@ const WorkOrderPhotos = () => {
             </div>
           )}
 
-          {/* Hidden File Input */}
+          {/* Hidden File Input for Gallery */}
           <input
             ref={fileInputRef}
             type="file"
             accept="image/*"
+            multiple
+            onChange={handleFileChange}
+            style={{ display: 'none' }}
+            disabled={uploading || !canAddMorePhotos()}
+          />
+
+          {/* Hidden File Input for Camera - Opens phone camera directly */}
+          <input
+            ref={cameraInputRef}
+            type="file"
+            accept="image/*"
+            capture="environment"
             multiple
             onChange={handleFileChange}
             style={{ display: 'none' }}
@@ -444,6 +479,122 @@ const WorkOrderPhotos = () => {
         </div>
       </div>
       
+      {/* Photo Source Selection Modal */}
+      {showPhotoSourceModal && (
+        <div className="modal fade show" style={{ display: 'block', backgroundColor: 'rgba(0,0,0,0.5)' }} tabIndex={-1}>
+          <div className="modal-dialog modal-dialog-centered">
+            <div className="modal-content">
+              <div className="modal-header">
+                <h5 className="modal-title">
+                  <i className="bi bi-camera me-2" style={{ color: AppConstants.primaryColor }}></i>
+                  Add Photos
+                </h5>
+                <button
+                  type="button"
+                  className="btn-close"
+                  onClick={() => setShowPhotoSourceModal(false)}
+                  aria-label="Close"
+                  disabled={uploading}
+                ></button>
+              </div>
+              <div className="modal-body">
+                <p className="mb-4 text-center">
+                  Choose how you want to add photos:
+                </p>
+                <div className="row g-3">
+                  {/* Gallery Option */}
+                  <div className="col-12">
+                    <button
+                      type="button"
+                      className="btn btn-outline-primary w-100 d-flex align-items-center justify-content-center p-4"
+                      onClick={handleGalleryClick}
+                      disabled={uploading || !canAddMorePhotos()}
+                      style={{
+                        borderRadius: '12px',
+                        borderWidth: '2px',
+                        fontSize: '16px',
+                        fontWeight: '500',
+                        minHeight: '80px',
+                        transition: 'all 0.2s'
+                      }}
+                      onMouseEnter={(e) => {
+                        if (!uploading && canAddMorePhotos()) {
+                          e.currentTarget.style.transform = 'scale(1.02)';
+                          e.currentTarget.style.boxShadow = '0 4px 12px rgba(0,0,0,0.15)';
+                        }
+                      }}
+                      onMouseLeave={(e) => {
+                        e.currentTarget.style.transform = 'scale(1)';
+                        e.currentTarget.style.boxShadow = 'none';
+                      }}
+                    >
+                      <div className="text-center">
+                        <i className="bi bi-images" style={{ fontSize: '32px', display: 'block', marginBottom: '8px' }}></i>
+                        <div className="fw-bold">Gallery</div>
+                        <small className="text-muted d-block mt-1">Select from your photos</small>
+                      </div>
+                    </button>
+                  </div>
+
+                  {/* Camera Option */}
+                  <div className="col-12">
+                    <button
+                      type="button"
+                      className="btn btn-outline-success w-100 d-flex align-items-center justify-content-center p-4"
+                      onClick={handleCameraClick}
+                      disabled={uploading || !canAddMorePhotos()}
+                      style={{
+                        borderRadius: '12px',
+                        borderWidth: '2px',
+                        fontSize: '16px',
+                        fontWeight: '500',
+                        minHeight: '80px',
+                        transition: 'all 0.2s'
+                      }}
+                      onMouseEnter={(e) => {
+                        if (!uploading && canAddMorePhotos()) {
+                          e.currentTarget.style.transform = 'scale(1.02)';
+                          e.currentTarget.style.boxShadow = '0 4px 12px rgba(0,0,0,0.15)';
+                        }
+                      }}
+                      onMouseLeave={(e) => {
+                        e.currentTarget.style.transform = 'scale(1)';
+                        e.currentTarget.style.boxShadow = 'none';
+                      }}
+                    >
+                      <div className="text-center">
+                        <i className="bi bi-camera-fill" style={{ fontSize: '32px', display: 'block', marginBottom: '8px' }}></i>
+                        <div className="fw-bold">Camera</div>
+                        <small className="text-muted d-block mt-1">Take a new photo</small>
+                      </div>
+                    </button>
+                  </div>
+                </div>
+
+                {/* Photo Limit Info */}
+                <div className="alert alert-info mt-3 mb-0" role="alert">
+                  <i className="bi bi-info-circle me-2"></i>
+                  <small>
+                    You can add {getRemainingPhotoCount()} more photo{getRemainingPhotoCount() !== 1 ? 's' : ''} 
+                    ({getCurrentPhotoCount()}/{MAX_PHOTOS} used)
+                  </small>
+                </div>
+              </div>
+              <div className="modal-footer">
+                <button
+                  type="button"
+                  className="btn btn-secondary"
+                  onClick={() => setShowPhotoSourceModal(false)}
+                  disabled={uploading}
+                >
+                  Cancel
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Delete Photo Confirmation Modal */}
       <ConfirmModal
         show={showDeleteConfirm}
