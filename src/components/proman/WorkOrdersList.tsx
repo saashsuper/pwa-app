@@ -22,9 +22,11 @@ const WorkOrdersList = () => {
     
     try {
       const data = await workOrderService.getMyWorkOrders();
-      setWorkOrders(data);
+      // Ensure data is always an array
+      setWorkOrders(Array.isArray(data) ? data : []);
     } catch (err: any) {
       setError(err.message || "Failed to load work orders");
+      setWorkOrders([]); // Set empty array on error
     } finally {
       setLoading(false);
     }

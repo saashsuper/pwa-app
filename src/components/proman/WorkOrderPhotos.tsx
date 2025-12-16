@@ -3,11 +3,10 @@ import { useParams, useNavigate } from "react-router-dom";
 import HeaderTwo from "../../layouts/headers/HeaderTwo";
 import FooterTwo from "../../layouts/footers/FooterTwo";
 import workOrderService, { WorkOrder } from "../../services/workOrderService";
-import AppConstants from "../../config/constants";
 import { useAuth } from "../../contexts/AuthContext";
 import ConfirmModal from "../common/ConfirmModal";
-
-const MAX_PHOTOS = 6;
+import AppConstants from "../../config/constants";
+import api from "../../services/api";
 
 const WorkOrderPhotos = () => {
   const { id } = useParams<{ id: string }>();
@@ -20,9 +19,13 @@ const WorkOrderPhotos = () => {
   const [deletingPhotoId, setDeletingPhotoId] = useState<number | null>(null);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [photoToDelete, setPhotoToDelete] = useState<number | null>(null);
+  const [selectedImage, setSelectedImage] = useState<string | null>(null);
   const [showPhotoSourceModal, setShowPhotoSourceModal] = useState(false);
+  const [showCameraModal, setShowCameraModal] = useState(false);
+  const [cameraStream, setCameraStream] = useState<MediaStream | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const cameraInputRef = useRef<HTMLInputElement>(null);
+  const videoRef = useRef<HTMLVideoElement>(null);
+  const canvasRef = useRef<HTMLCanvasElement>(null);
 
   useEffect(() => {
     if (id) {
@@ -43,109 +46,30 @@ const WorkOrderPhotos = () => {
     }
   };
 
-  const handleAddPhotosClick = () => {
-    setShowPhotoSourceModal(true);
-  };
-
-  const handleGalleryClick = () => {
-    setShowPhotoSourceModal(false);
-    if (fileInputRef.current) {
-      fileInputRef.current.click();
-    }
-  };
-
-  const handleCameraClick = () => {
-    setShowPhotoSourceModal(false);
-    if (cameraInputRef.current) {
-      cameraInputRef.current.click();
-    }
-  };
-
-  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const files = e.target.files;
-    if (!files || files.length === 0 || !id || uploading) return;
-
-    const fileArray = Array.from(files);
-    const currentPhotoCount = workOrder?.images?.length || 0;
-    const totalPhotos = currentPhotoCount + fileArray.length;
-
-    // Check if adding these photos would exceed the limit
-    if (totalPhotos > MAX_PHOTOS) {
-      const allowed = MAX_PHOTOS - currentPhotoCount;
-      setError(`Maximum ${MAX_PHOTOS} photos allowed. You can add ${allowed} more photo(s).`);
-      // Reset file inputs
-      if (fileInputRef.current) {
-        fileInputRef.current.value = '';
-      }
-      if (cameraInputRef.current) {
-        cameraInputRef.current.value = '';
-      }
-      return;
-    }
-
-    setUploading(true);
-    setError("");
-
-    try {
-      const updatedWorkOrder = await workOrderService.uploadPhotos(Number(id), fileArray);
-      setWorkOrder(updatedWorkOrder);
-      
-      // Reset file inputs
-      if (fileInputRef.current) {
-        fileInputRef.current.value = '';
-      }
-      if (cameraInputRef.current) {
-        cameraInputRef.current.value = '';
-      }
-    } catch (err: any) {
-      setError(err.message || "Failed to upload photos");
-      // Reset file inputs on error
-      if (fileInputRef.current) {
-        fileInputRef.current.value = '';
-      }
-      if (cameraInputRef.current) {
-        cameraInputRef.current.value = '';
-      }
-    } finally {
-      setUploading(false);
-    }
-  };
-
-  const getCurrentPhotoCount = (): number => {
-    return workOrder?.images?.length || 0;
-  };
-
-  const canAddMorePhotos = (): boolean => {
-    return getCurrentPhotoCount() < MAX_PHOTOS;
-  };
-
-  const getRemainingPhotoCount = (): number => {
-    return MAX_PHOTOS - getCurrentPhotoCount();
-  };
-
   const isJobCompleted = (): boolean => {
     if (!workOrder?.job_status) return false;
     const jobStatus = workOrder.job_status;
     if (typeof jobStatus === 'string') {
       return jobStatus.toLowerCase() === 'completed';
     }
-    if (typeof jobStatus === 'object' && jobStatus.name) {
-      return jobStatus.name.toLowerCase() === 'completed';
+    if (typeof jobStatus === 'object' && jobStatus !== null && 'name' in jobStatus) {
+      return jobStatus.name?.toLowerCase() === 'completed';
     }
     return false;
   };
 
-  const canDeletePhoto = (image: any): boolean => {
-    if (!user || !image) return false;
-    
-    // Cannot delete if job is completed
-    if (isJobCompleted()) return false;
+  const canManagePhotos = (): boolean => {
+    return !isJobCompleted();
+  };
+
+  const canDeletePhoto = (photo: any): boolean => {
+    if (!canManagePhotos()) return false;
+    if (!user) return false;
     
     // User can delete if they created it
-    if (image.created_by === user.id) return true;
+    if (photo.created_by === user.id) return true;
     
-    // Contractor Admin can delete any photo from their team
-    // (Backend will verify they're in the same contract company)
+    // Contractor Admin can delete any photo from their team's work orders
     const userType = user.user_type;
     if (userType && typeof userType === 'object' && userType.name === 'Contractor Admin') {
       return true;
@@ -153,6 +77,129 @@ const WorkOrderPhotos = () => {
     
     return false;
   };
+
+  const handleFileSelect = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const files = event.target.files;
+    if (!files || files.length === 0) return;
+
+    await uploadFiles(Array.from(files));
+    
+    if (fileInputRef.current) {
+      fileInputRef.current.value = '';
+    }
+  };
+
+  const uploadFiles = async (files: File[]) => {
+    if (!id || uploading || !canManagePhotos() || files.length === 0) return;
+
+    setUploading(true);
+    setError("");
+
+    try {
+      const formData = new FormData();
+      files.forEach((file) => {
+        formData.append('photos[]', file);
+      });
+
+      const response = await api.post<{ success: boolean; message: string; data: WorkOrder }>(
+        `${AppConstants.endpoints.workOrderDetail}/${id}/photos`,
+        formData,
+        {
+          headers: {
+            'Content-Type': 'multipart/form-data',
+          },
+        }
+      );
+
+      if (response.data.success) {
+        setWorkOrder(response.data.data);
+        setShowPhotoSourceModal(false);
+        setShowCameraModal(false);
+        stopCamera();
+      } else {
+        throw new Error(response.data.message || 'Failed to upload photos');
+      }
+    } catch (err: any) {
+      setError(err.response?.data?.message || err.message || "Failed to upload photos");
+    } finally {
+      setUploading(false);
+    }
+  };
+
+  const handleAddPhotoClick = () => {
+    setShowPhotoSourceModal(true);
+  };
+
+  const handleUploadFromGallery = () => {
+    setShowPhotoSourceModal(false);
+    fileInputRef.current?.click();
+  };
+
+  const handleTakePhoto = async () => {
+    setShowPhotoSourceModal(false);
+    setShowCameraModal(true);
+    
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ 
+        video: { facingMode: 'environment' } // Use back camera on mobile
+      });
+      setCameraStream(stream);
+      if (videoRef.current) {
+        videoRef.current.srcObject = stream;
+      }
+    } catch (err: any) {
+      setError('Unable to access camera: ' + (err.message || 'Permission denied'));
+      setShowCameraModal(false);
+    }
+  };
+
+  const stopCamera = () => {
+    if (cameraStream) {
+      cameraStream.getTracks().forEach(track => track.stop());
+      setCameraStream(null);
+    }
+    if (videoRef.current) {
+      videoRef.current.srcObject = null;
+    }
+  };
+
+  const capturePhoto = () => {
+    if (!videoRef.current || !canvasRef.current) return;
+
+    const video = videoRef.current;
+    const canvas = canvasRef.current;
+    const context = canvas.getContext('2d');
+
+    if (!context) return;
+
+    canvas.width = video.videoWidth;
+    canvas.height = video.videoHeight;
+    context.drawImage(video, 0, 0);
+
+    canvas.toBlob((blob) => {
+      if (blob) {
+        const file = new File([blob], `photo-${Date.now()}.jpg`, { type: 'image/jpeg' });
+        uploadFiles([file]);
+      }
+    }, 'image/jpeg', 0.9);
+  };
+
+  // Cleanup camera when modal closes
+  useEffect(() => {
+    if (!showCameraModal) {
+      stopCamera();
+    }
+  }, [showCameraModal]);
+
+  // Cleanup camera on unmount
+  useEffect(() => {
+    return () => {
+      if (cameraStream) {
+        cameraStream.getTracks().forEach(track => track.stop());
+      }
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const handleDeletePhotoClick = (photoId: number) => {
     if (!id || deletingPhotoId) return;
@@ -168,16 +215,50 @@ const WorkOrderPhotos = () => {
     setShowDeleteConfirm(false);
 
     try {
-      const updatedWorkOrder = await workOrderService.deletePhoto(Number(id), photoToDelete);
-      setWorkOrder(updatedWorkOrder);
-      setPhotoToDelete(null);
+      const response = await api.delete<{ success: boolean; message: string; data: WorkOrder }>(
+        `${AppConstants.endpoints.workOrderDetail}/${id}/photos/${photoToDelete}`
+      );
+
+      if (response.data.success) {
+        setWorkOrder(response.data.data);
+        setPhotoToDelete(null);
+      } else {
+        throw new Error(response.data.message || 'Failed to delete photo');
+      }
     } catch (err: any) {
-      setError(err.message || "Failed to delete photo");
+      setError(err.response?.data?.message || err.message || "Failed to delete photo");
     } finally {
       setDeletingPhotoId(null);
     }
   };
 
+  const getImageUrl = (image: any): string => {
+    if (image.url) return image.url;
+    if (image.image_path && image.image_name) {
+      return `${AppConstants.baseUrl}/storage/${image.image_path}/${image.image_name}`;
+    }
+    return '';
+  };
+
+  const formatDate = (dateStr?: string | null): string => {
+    if (!dateStr) return '';
+    try {
+      const date = new Date(dateStr);
+      return date.toLocaleString('en-US', { 
+        year: 'numeric', 
+        month: 'short', 
+        day: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit'
+      });
+    } catch {
+      return dateStr.toString();
+    }
+  };
+
+  const currentPhotoCount = workOrder?.images?.length || 0;
+  const maxPhotos = 6;
+  const canAddMore = canManagePhotos() && currentPhotoCount < maxPhotos;
 
   if (loading) {
     return (
@@ -188,6 +269,7 @@ const WorkOrderPhotos = () => {
             <div className="spinner-border text-primary" role="status">
               <span className="visually-hidden">Loading...</span>
             </div>
+            <p className="mt-2 text-muted">Loading photos...</p>
           </div>
         </div>
         <FooterTwo />
@@ -201,8 +283,16 @@ const WorkOrderPhotos = () => {
         <HeaderTwo />
         <div className="page-content-wrapper">
           <div className="container">
-            <div className="alert alert-danger">{error}</div>
-            <button className="btn btn-primary" onClick={() => navigate(-1)}>Go Back</button>
+            <div className="pt-3">
+              <div className="alert alert-danger">
+                <i className="bi bi-exclamation-triangle me-2"></i>
+                {error}
+              </div>
+              <button className="btn btn-primary" onClick={() => navigate(-1)}>
+                <i className="bi bi-arrow-left me-2"></i>
+                Go Back
+              </button>
+            </div>
           </div>
         </div>
         <FooterTwo />
@@ -215,279 +305,249 @@ const WorkOrderPhotos = () => {
       <HeaderTwo />
       <div className="page-content-wrapper">
         <div className="container">
-          <div className="mb-4">
-            <button
-              className="btn btn-link p-0 mb-2"
-              onClick={() => navigate(-1)}
-              style={{ textDecoration: 'none' }}
-            >
-              <i className="bi bi-arrow-left me-2"></i>
-              Back to Work Order
-            </button>
-            <h4 className="mb-0">Work Order Photos</h4>
-            {workOrder && (
-              <small className="text-muted">Work Order #{workOrder.ref_no || id}</small>
-            )}
-          </div>
-
-          {error && (
-            <div className="alert alert-warning alert-dismissible fade show" role="alert">
-              {error}
-              <button
-                type="button"
-                className="btn-close"
-                onClick={() => setError("")}
-                aria-label="Close"
-              ></button>
-            </div>
-          )}
-
-          {/* Add Photos Button */}
-          {canAddMorePhotos() && (
-            <div className="card mb-3">
-              <div className="card-body">
-                <div className="d-flex justify-content-between align-items-center">
-                  <div>
-                    <h6 className="mb-1">
-                      <i className="bi bi-camera me-2" style={{ color: AppConstants.primaryColor }}></i>
-                      Add Photos
-                    </h6>
-                    <small className="text-muted">
-                      {getCurrentPhotoCount()}/{MAX_PHOTOS} photos uploaded. You can add {getRemainingPhotoCount()} more.
-                    </small>
-                  </div>
-                  <button
-                    className="btn btn-primary"
-                    onClick={handleAddPhotosClick}
-                    disabled={uploading}
-                    style={{
-                      borderRadius: '8px',
-                      padding: '10px 20px',
-                      fontWeight: '500'
-                    }}
-                  >
-                    {uploading ? (
-                      <>
-                        <span className="spinner-border spinner-border-sm me-2" role="status"></span>
-                        Uploading...
-                      </>
-                    ) : (
-                      <>
-                        <i className="bi bi-plus-circle me-2"></i>
-                        Add Photos
-                      </>
-                    )}
-                  </button>
-                </div>
+          <div className="pt-3">
+            {/* Header */}
+            <div className="d-flex justify-content-between align-items-center mb-3">
+              <div>
+                <button
+                  className="btn btn-sm btn-outline-secondary mb-2"
+                  onClick={() => navigate(`/work-order/${id}`)}
+                  style={{ textDecoration: 'none' }}
+                >
+                  <i className="bi bi-arrow-left me-2"></i>
+                  Back to Work Order
+                </button>
+                <h4 className="mb-1">Work Order Photos</h4>
+                {workOrder && (
+                  <p className="mb-0 text-muted small">
+                    Work Order {workOrder.ref_no || `#${workOrder.id}`}
+                  </p>
+                )}
               </div>
-            </div>
-          )}
-
-          {/* Photo Limit Reached Message */}
-          {!canAddMorePhotos() && (
-            <div className="alert alert-info mb-3">
-              <i className="bi bi-info-circle me-2"></i>
-              Maximum {MAX_PHOTOS} photos reached for this work order.
-            </div>
-          )}
-
-          {/* Hidden File Input for Gallery */}
-          <input
-            ref={fileInputRef}
-            type="file"
-            accept="image/*"
-            multiple
-            onChange={handleFileChange}
-            style={{ display: 'none' }}
-            disabled={uploading || !canAddMorePhotos()}
-          />
-
-          {/* Hidden File Input for Camera - Opens phone camera directly */}
-          <input
-            ref={cameraInputRef}
-            type="file"
-            accept="image/*"
-            capture="environment"
-            multiple
-            onChange={handleFileChange}
-            style={{ display: 'none' }}
-            disabled={uploading || !canAddMorePhotos()}
-          />
-
-          {/* Existing Photos as Thumbnails */}
-          {workOrder?.images && workOrder.images.length > 0 ? (
-            <div className="card">
-              <div className="card-body">
-                <div className="d-flex justify-content-between align-items-center mb-3">
-                  <h6 className="mb-0">
-                    <i className="bi bi-images me-2" style={{ color: '#20c997' }}></i>
-                    Photos ({workOrder.images.length}/{MAX_PHOTOS})
-                  </h6>
-                  <span className="badge bg-primary">
+              <div className="d-flex align-items-center gap-2">
+                {workOrder?.images && workOrder.images.length > 0 && (
+                  <span className="badge bg-info" style={{ fontSize: '14px' }}>
                     {workOrder.images.length} {workOrder.images.length === 1 ? 'Photo' : 'Photos'}
                   </span>
-                </div>
-                <div className="row g-3">
-                  {workOrder.images.map((image: any, index: number) => {
-                    const getImageUrl = () => {
-                      if (typeof image === 'string') {
-                        return image.startsWith('http') ? image : `${AppConstants.baseUrl}/${image.replace(/^\//, '')}`;
-                      }
-                      
-                      // Check if image_url is already available (from model accessor)
-                      if (image.image_url) {
-                        // If it's already a full URL, return it
-                        if (image.image_url.startsWith('http')) {
-                          return image.image_url;
-                        }
-                        // Otherwise prepend baseUrl
-                        return `${AppConstants.baseUrl}/${image.image_url.replace(/^\//, '')}`;
-                      }
-                      
-                      // Construct URL from image_path and image_name as fallback
-                      const imagePath = image.image_path || image.path;
-                      const imageName = image.image_name || image.name;
-                      
-                      if (imagePath && imageName) {
-                        return `${AppConstants.baseUrl}/storage/${imagePath}/${imageName}`;
-                      }
-                      
-                      // Final fallback to url or path
-                      const imgPath = image.url || image.path;
-                      if (!imgPath) return '';
-                      if (imgPath.startsWith('http')) return imgPath;
-                      
-                      return `${AppConstants.baseUrl}/${imgPath.replace(/^\//, '')}`;
-                    };
-                    const imageUrl = getImageUrl();
-                    if (!imageUrl) return null;
-                    const canDelete = canDeletePhoto(image);
-                    const isDeleting = deletingPhotoId === image.id;
-                    return (
-                      <div key={image.id || index} className="col-6 col-md-4 col-lg-3">
-                        <div className="position-relative">
-                          <img
-                            src={imageUrl}
-                            alt={`Work order photo ${index + 1}`}
-                            className="img-fluid rounded shadow-sm"
-                            style={{
-                              width: '100%',
-                              height: '150px',
-                              objectFit: 'cover',
-                              cursor: 'pointer',
-                              transition: 'transform 0.2s',
-                              opacity: isDeleting ? 0.5 : 1
-                            }}
-                            onClick={() => !isDeleting && window.open(imageUrl, '_blank')}
-                            onError={(e) => {
-                              const target = e.target as HTMLImageElement;
-                              target.src = '/assets/img/demo-img/default-image.jpg';
-                            }}
-                            onMouseEnter={(e) => {
-                              if (!isDeleting) {
-                                e.currentTarget.style.transform = 'scale(1.05)';
-                              }
-                            }}
-                            onMouseLeave={(e) => {
-                              e.currentTarget.style.transform = 'scale(1)';
-                            }}
-                          />
-                          <div 
-                            className="position-absolute top-0 end-0 m-2"
-                            style={{
-                              backgroundColor: 'rgba(0,0,0,0.6)',
-                              borderRadius: '50%',
-                              width: '30px',
-                              height: '30px',
-                              display: 'flex',
-                              alignItems: 'center',
-                              justifyContent: 'center',
-                              color: 'white',
-                              fontSize: '12px',
-                              fontWeight: 'bold'
-                            }}
-                          >
-                            {index + 1}
-                          </div>
-                          {canDelete && (
-                            <button
-                              className="btn btn-danger btn-sm position-absolute top-0 start-0 m-2"
-                              style={{
-                                borderRadius: '50%',
-                                width: '32px',
-                                height: '32px',
-                                padding: 0,
-                                display: 'flex',
-                                alignItems: 'center',
-                                justifyContent: 'center',
-                                border: '2px solid white',
-                                boxShadow: '0 2px 4px rgba(0,0,0,0.3)'
-                              }}
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                if (image.id && !isDeleting) {
-                                  handleDeletePhotoClick(image.id);
-                                }
-                              }}
-                              disabled={isDeleting}
-                              title="Delete photo"
-                            >
-                              {isDeleting ? (
-                                <span className="spinner-border spinner-border-sm" style={{ width: '14px', height: '14px' }}></span>
-                              ) : (
-                                <i className="bi bi-trash" style={{ fontSize: '14px' }}></i>
-                              )}
-                            </button>
-                          )}
-                          {image.creator && (
-                            <div 
-                              className="position-absolute bottom-0 start-0 m-2"
-                              style={{
-                                backgroundColor: 'rgba(0,0,0,0.7)',
-                                borderRadius: '4px',
-                                padding: '2px 6px',
-                                fontSize: '10px',
-                                color: 'white',
-                                maxWidth: 'calc(100% - 80px)',
-                                overflow: 'hidden',
-                                textOverflow: 'ellipsis',
-                                whiteSpace: 'nowrap'
-                              }}
-                              title={`Added by ${image.creator.name || image.creator.email || 'Unknown'}`}
-                            >
-                              {image.creator.name || image.creator.email || 'Unknown'}
-                            </div>
-                          )}
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-              </div>
-            </div>
-          ) : (
-            <div className="card">
-              <div className="card-body text-center py-5">
-                <i className="bi bi-images" style={{ fontSize: '48px', color: '#dee2e6' }}></i>
-                <p className="text-muted mt-3 mb-0">No photos added yet</p>
-                {canAddMorePhotos() && (
-                  <p className="text-muted small mb-0">Click "Add Photos" button above to add photos</p>
+                )}
+                {canAddMore && (
+                  <>
+                    <input
+                      ref={fileInputRef}
+                      type="file"
+                      accept="image/jpeg,image/png,image/jpg"
+                      multiple
+                      onChange={handleFileSelect}
+                      style={{ display: 'none' }}
+                      disabled={uploading}
+                    />
+                    <button
+                      className="btn btn-primary"
+                      onClick={handleAddPhotoClick}
+                      disabled={uploading}
+                      style={{
+                        borderRadius: '8px',
+                        padding: '8px 16px',
+                        fontWeight: '500'
+                      }}
+                    >
+                      {uploading ? (
+                        <>
+                          <span className="spinner-border spinner-border-sm me-2" role="status"></span>
+                          Uploading...
+                        </>
+                      ) : (
+                        <>
+                          <i className="bi bi-camera me-2"></i>
+                          Add Photos ({maxPhotos - currentPhotoCount} remaining)
+                        </>
+                      )}
+                    </button>
+                  </>
                 )}
               </div>
             </div>
-          )}
+
+            {error && (
+              <div className="alert alert-warning alert-dismissible fade show" role="alert">
+                {error}
+                <button
+                  type="button"
+                  className="btn-close"
+                  onClick={() => setError("")}
+                  aria-label="Close"
+                ></button>
+              </div>
+            )}
+
+            {/* Photos Grid */}
+            {workOrder?.images && workOrder.images.length > 0 ? (
+              <div className="card">
+                <div className="card-body">
+                  <h6 className="mb-3">
+                    <i className="bi bi-images me-2" style={{ color: AppConstants.primaryColor }}></i>
+                    All Photos
+                  </h6>
+                  <div className="row g-3">
+                    {workOrder.images.map((image) => {
+                      const imageUrl = getImageUrl(image);
+                      const canDelete = canDeletePhoto(image);
+                      const isDeleting = deletingPhotoId === image.id;
+                      
+                      return (
+                        <div key={image.id} className="col-6 col-md-4">
+                          <div className="card position-relative" style={{ opacity: isDeleting ? 0.5 : 1 }}>
+                            <div
+                              style={{
+                                width: '100%',
+                                paddingTop: '100%',
+                                position: 'relative',
+                                overflow: 'hidden',
+                                cursor: 'pointer'
+                              }}
+                              onClick={() => setSelectedImage(imageUrl)}
+                            >
+                              <img
+                                src={imageUrl}
+                                alt={`Photo ${image.id}`}
+                                style={{
+                                  position: 'absolute',
+                                  top: 0,
+                                  left: 0,
+                                  width: '100%',
+                                  height: '100%',
+                                  objectFit: 'cover'
+                                }}
+                                onError={(e) => {
+                                  const target = e.target as HTMLImageElement;
+                                  target.style.display = 'none';
+                                  const parent = target.parentElement;
+                                  if (parent) {
+                                    parent.innerHTML = '<div style="position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); color: #999;"><i class="bi bi-image" style="font-size: 2rem;"></i></div>';
+                                  }
+                                }}
+                              />
+                            </div>
+                            <div className="card-body p-2">
+                              {image.creator && (
+                                <small className="text-muted d-block">
+                                  <i className="bi bi-person me-1"></i>
+                                  {image.creator.name || image.creator.email || 'Unknown'}
+                                </small>
+                              )}
+                              {image.created_at && (
+                                <small className="text-muted d-block">
+                                  <i className="bi bi-clock me-1"></i>
+                                  {formatDate(image.created_at)}
+                                </small>
+                              )}
+                              {canDelete && (
+                                <button
+                                  className="btn btn-sm btn-outline-danger w-100 mt-2"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    handleDeletePhotoClick(image.id);
+                                  }}
+                                  disabled={isDeleting}
+                                  title="Delete photo"
+                                >
+                                  {isDeleting ? (
+                                    <span className="spinner-border spinner-border-sm" style={{ width: '14px', height: '14px' }}></span>
+                                  ) : (
+                                    <>
+                                      <i className="bi bi-trash me-1"></i>
+                                      Delete
+                                    </>
+                                  )}
+                                </button>
+                              )}
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              </div>
+            ) : (
+              <div className="card">
+                <div className="card-body text-center py-5">
+                  <i className="bi bi-images" style={{ fontSize: '48px', color: '#dee2e6' }}></i>
+                  <p className="text-muted mt-3 mb-0">No photos available for this work order</p>
+                  {canAddMore && (
+                    <button
+                      className="btn btn-primary mt-3"
+                      onClick={handleAddPhotoClick}
+                      disabled={uploading}
+                    >
+                      <i className="bi bi-camera me-2"></i>
+                      Add First Photo
+                    </button>
+                  )}
+                </div>
+              </div>
+            )}
+
+            {!canManagePhotos() && (
+              <div className="alert alert-info mt-3">
+                <i className="bi bi-info-circle me-2"></i>
+                Photos cannot be added or deleted for completed work orders.
+              </div>
+            )}
+
+            <div className="pb-3"></div>
+          </div>
         </div>
       </div>
-      
+
+      {/* Image Modal */}
+      {selectedImage && (
+        <div 
+          className="modal fade show" 
+          style={{ display: 'block', backgroundColor: 'rgba(0,0,0,0.9)' }} 
+          tabIndex={-1}
+          onClick={() => setSelectedImage(null)}
+        >
+          <div className="modal-dialog modal-dialog-centered modal-lg">
+            <div className="modal-content" onClick={(e) => e.stopPropagation()}>
+              <div className="modal-header border-0">
+                <button
+                  type="button"
+                  className="btn-close btn-close-white"
+                  onClick={() => setSelectedImage(null)}
+                  aria-label="Close"
+                ></button>
+              </div>
+              <div className="modal-body p-0">
+                <img
+                  src={selectedImage}
+                  alt="Full size"
+                  style={{ width: '100%', height: 'auto', display: 'block' }}
+                  onError={(e) => {
+                    const target = e.target as HTMLImageElement;
+                    target.style.display = 'none';
+                  }}
+                />
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Photo Source Selection Modal */}
       {showPhotoSourceModal && (
-        <div className="modal fade show" style={{ display: 'block', backgroundColor: 'rgba(0,0,0,0.5)' }} tabIndex={-1}>
+        <div 
+          className="modal fade show" 
+          style={{ display: 'block', backgroundColor: 'rgba(0,0,0,0.5)' }} 
+          tabIndex={-1}
+          onClick={() => setShowPhotoSourceModal(false)}
+        >
           <div className="modal-dialog modal-dialog-centered">
-            <div className="modal-content">
+            <div className="modal-content" onClick={(e) => e.stopPropagation()}>
               <div className="modal-header">
                 <h5 className="modal-title">
-                  <i className="bi bi-camera me-2" style={{ color: AppConstants.primaryColor }}></i>
-                  Add Photos
+                  <i className="bi bi-camera me-2"></i>
+                  Add Photo
                 </h5>
                 <button
                   type="button"
@@ -498,96 +558,114 @@ const WorkOrderPhotos = () => {
                 ></button>
               </div>
               <div className="modal-body">
-                <p className="mb-4 text-center">
-                  Choose how you want to add photos:
-                </p>
-                <div className="row g-3">
-                  {/* Gallery Option */}
-                  <div className="col-12">
-                    <button
-                      type="button"
-                      className="btn btn-outline-primary w-100 d-flex align-items-center justify-content-center p-4"
-                      onClick={handleGalleryClick}
-                      disabled={uploading || !canAddMorePhotos()}
-                      style={{
-                        borderRadius: '12px',
-                        borderWidth: '2px',
-                        fontSize: '16px',
-                        fontWeight: '500',
-                        minHeight: '80px',
-                        transition: 'all 0.2s'
-                      }}
-                      onMouseEnter={(e) => {
-                        if (!uploading && canAddMorePhotos()) {
-                          e.currentTarget.style.transform = 'scale(1.02)';
-                          e.currentTarget.style.boxShadow = '0 4px 12px rgba(0,0,0,0.15)';
-                        }
-                      }}
-                      onMouseLeave={(e) => {
-                        e.currentTarget.style.transform = 'scale(1)';
-                        e.currentTarget.style.boxShadow = 'none';
-                      }}
-                    >
-                      <div className="text-center">
-                        <i className="bi bi-images" style={{ fontSize: '32px', display: 'block', marginBottom: '8px' }}></i>
-                        <div className="fw-bold">Gallery</div>
-                        <small className="text-muted d-block mt-1">Select from your photos</small>
-                      </div>
-                    </button>
-                  </div>
-
-                  {/* Camera Option */}
-                  <div className="col-12">
-                    <button
-                      type="button"
-                      className="btn btn-outline-success w-100 d-flex align-items-center justify-content-center p-4"
-                      onClick={handleCameraClick}
-                      disabled={uploading || !canAddMorePhotos()}
-                      style={{
-                        borderRadius: '12px',
-                        borderWidth: '2px',
-                        fontSize: '16px',
-                        fontWeight: '500',
-                        minHeight: '80px',
-                        transition: 'all 0.2s'
-                      }}
-                      onMouseEnter={(e) => {
-                        if (!uploading && canAddMorePhotos()) {
-                          e.currentTarget.style.transform = 'scale(1.02)';
-                          e.currentTarget.style.boxShadow = '0 4px 12px rgba(0,0,0,0.15)';
-                        }
-                      }}
-                      onMouseLeave={(e) => {
-                        e.currentTarget.style.transform = 'scale(1)';
-                        e.currentTarget.style.boxShadow = 'none';
-                      }}
-                    >
-                      <div className="text-center">
-                        <i className="bi bi-camera-fill" style={{ fontSize: '32px', display: 'block', marginBottom: '8px' }}></i>
-                        <div className="fw-bold">Camera</div>
-                        <small className="text-muted d-block mt-1">Take a new photo</small>
-                      </div>
-                    </button>
-                  </div>
-                </div>
-
-                {/* Photo Limit Info */}
-                <div className="alert alert-info mt-3 mb-0" role="alert">
-                  <i className="bi bi-info-circle me-2"></i>
-                  <small>
-                    You can add {getRemainingPhotoCount()} more photo{getRemainingPhotoCount() !== 1 ? 's' : ''} 
-                    ({getCurrentPhotoCount()}/{MAX_PHOTOS} used)
-                  </small>
+                <div className="d-grid gap-2">
+                  <button
+                    type="button"
+                    className="btn btn-outline-primary btn-lg"
+                    onClick={handleUploadFromGallery}
+                    disabled={uploading}
+                    style={{ textAlign: 'left', padding: '1rem' }}
+                  >
+                    <i className="bi bi-images me-3" style={{ fontSize: '1.5rem' }}></i>
+                    <div>
+                      <div className="fw-bold">Upload from Gallery</div>
+                      <small className="text-muted">Choose photos from your device</small>
+                    </div>
+                  </button>
+                  <button
+                    type="button"
+                    className="btn btn-outline-primary btn-lg"
+                    onClick={handleTakePhoto}
+                    disabled={uploading}
+                    style={{ textAlign: 'left', padding: '1rem' }}
+                  >
+                    <i className="bi bi-camera-fill me-3" style={{ fontSize: '1.5rem' }}></i>
+                    <div>
+                      <div className="fw-bold">Take Photo</div>
+                      <small className="text-muted">Use your camera to capture a photo</small>
+                    </div>
+                  </button>
                 </div>
               </div>
-              <div className="modal-footer">
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Camera Modal */}
+      {showCameraModal && (
+        <div 
+          className="modal fade show" 
+          style={{ display: 'block', backgroundColor: 'rgba(0,0,0,0.9)' }} 
+          tabIndex={-1}
+        >
+          <div className="modal-dialog modal-dialog-centered modal-fullscreen-sm-down">
+            <div className="modal-content bg-dark">
+              <div className="modal-header border-secondary">
+                <h5 className="modal-title text-white">
+                  <i className="bi bi-camera me-2"></i>
+                  Take Photo
+                </h5>
+                <button
+                  type="button"
+                  className="btn-close btn-close-white"
+                  onClick={() => {
+                    stopCamera();
+                    setShowCameraModal(false);
+                  }}
+                  aria-label="Close"
+                  disabled={uploading}
+                ></button>
+              </div>
+              <div className="modal-body p-0 position-relative" style={{ minHeight: '400px' }}>
+                <video
+                  ref={videoRef}
+                  autoPlay
+                  playsInline
+                  style={{ width: '100%', height: 'auto', display: 'block' }}
+                />
+                <canvas ref={canvasRef} style={{ display: 'none' }} />
+                {!cameraStream && (
+                  <div className="position-absolute top-50 start-50 translate-middle text-center text-white">
+                    <div className="spinner-border" role="status">
+                      <span className="visually-hidden">Loading camera...</span>
+                    </div>
+                    <p className="mt-2">Starting camera...</p>
+                  </div>
+                )}
+              </div>
+              <div className="modal-footer border-secondary justify-content-center">
                 <button
                   type="button"
                   className="btn btn-secondary"
-                  onClick={() => setShowPhotoSourceModal(false)}
+                  onClick={() => {
+                    stopCamera();
+                    setShowCameraModal(false);
+                  }}
                   disabled={uploading}
                 >
+                  <i className="bi bi-x-lg me-2"></i>
                   Cancel
+                </button>
+                <button
+                  type="button"
+                  className="btn btn-primary btn-lg"
+                  onClick={capturePhoto}
+                  disabled={!cameraStream || uploading}
+                  style={{ 
+                    width: '70px', 
+                    height: '70px', 
+                    borderRadius: '50%',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center'
+                  }}
+                >
+                  {uploading ? (
+                    <span className="spinner-border spinner-border-sm" role="status"></span>
+                  ) : (
+                    <i className="bi bi-camera-fill" style={{ fontSize: '1.5rem' }}></i>
+                  )}
                 </button>
               </div>
             </div>
@@ -617,5 +695,3 @@ const WorkOrderPhotos = () => {
 };
 
 export default WorkOrderPhotos;
-
-

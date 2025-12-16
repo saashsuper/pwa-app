@@ -5,15 +5,52 @@ import FooterTwo from "../../layouts/footers/FooterTwo";
 import issueService, { BlockIssue } from "../../services/issueService";
 import AppConstants from "../../config/constants";
 
+// Helper function to get image URL (defined outside component to prevent recreation)
+const getImageUrl = (image: any, baseUrl: string): string => {
+  // If it's already a full URL, return it
+  if (typeof image === 'string') {
+    return image.startsWith('http') ? image : `${baseUrl}/${image.replace(/^\//, '')}`;
+  }
+  
+  // Handle BlockIssueImage structure: has image_path and image_name
+  // Format: storage/{image_path}/{image_name}
+  if (image.image_path && image.image_name) {
+    // Clean up the path (remove leading/trailing slashes and 'storage/' prefix if present)
+    let path = image.image_path.replace(/^\/storage\//, '').replace(/^storage\//, '').replace(/\/$/, '');
+    // Construct URL: baseUrl/storage/image_path/image_name
+    const url = `${baseUrl}/storage/${path}/${image.image_name}`;
+    return url;
+  }
+  
+  // Try image_url attribute (if model provides it)
+  if (image.image_url) {
+    if (image.image_url.startsWith('http')) return image.image_url;
+    return `${baseUrl}/${image.image_url.replace(/^\//, '')}`;
+  }
+  
+  // Fallback: try other common fields
+  const imgPath = image.url || image.path || image.image_path;
+  if (!imgPath) return '';
+  
+  // If it's already a full URL, return it
+  if (imgPath.startsWith('http')) return imgPath;
+  
+  // Otherwise construct relative URL
+  return `${baseUrl}/${imgPath.replace(/^\//, '')}`;
+};
+
 const IssueDetail = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const [issue, setIssue] = useState<BlockIssue | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const [failedImages, setFailedImages] = useState<Set<string>>(new Set());
 
   useEffect(() => {
     if (id) {
+      // Reset failed images when issue changes
+      setFailedImages(new Set());
       loadIssue();
     }
   }, [id]);
@@ -412,18 +449,25 @@ const IssueDetail = () => {
                   </h6>
                   <div className="row g-2">
                     {issue.images.map((image: any, index: number) => {
-                      const getImageUrl = () => {
-                        if (typeof image === 'string') {
-                          return image.startsWith('http') ? image : `${AppConstants.baseUrl}/${image.replace(/^\//, '')}`;
-                        }
-                        const imgPath = image.image_path || image.url || image.path;
-                        if (!imgPath) return '';
-                        return imgPath.startsWith('http') ? imgPath : `${AppConstants.baseUrl}/${imgPath.replace(/^\//, '')}`;
-                      };
-                      const imageUrl = getImageUrl();
-                      if (!imageUrl) return null;
+                      const imageKey = image.id || `img-${index}`;
+                      const hasFailed = failedImages.has(imageKey);
+                      
+                      if (hasFailed) {
+                        console.log('Skipping failed image:', imageKey, image);
+                        return null;
+                      }
+                      
+                      const imageUrl = getImageUrl(image, AppConstants.baseUrl);
+                      
+                      if (!imageUrl) {
+                        console.warn('No image URL found for image:', image);
+                        return null;
+                      }
+                      
+                      console.log('Rendering image:', imageKey, imageUrl, image);
+                      
                       return (
-                        <div key={image.id || index} className="col-6 col-md-4">
+                        <div key={imageKey} className="col-6 col-md-4">
                           <img
                             src={imageUrl}
                             alt={`Issue photo ${index + 1}`}
@@ -431,9 +475,18 @@ const IssueDetail = () => {
                             style={{ width: '100%', height: '150px', objectFit: 'cover', cursor: 'pointer' }}
                             onClick={() => window.open(imageUrl, '_blank')}
                             onError={(e) => {
+                              // Prevent infinite loop by tracking failed images
                               const target = e.target as HTMLImageElement;
-                              target.src = '/assets/img/demo-img/default-image.jpg';
+                              if (!failedImages.has(imageKey)) {
+                                console.warn('Failed to load image:', imageUrl, 'Image data:', image);
+                                setFailedImages(prev => new Set([...prev, imageKey]));
+                                target.style.display = 'none';
+                              }
                             }}
+                            onLoad={() => {
+                              console.log('Successfully loaded image:', imageUrl);
+                            }}
+                            loading="lazy"
                           />
                         </div>
                       );
@@ -533,6 +586,9 @@ const IssueDetail = () => {
 };
 
 export default IssueDetail;
+
+
+
 
 
 

@@ -3,7 +3,7 @@
 
 // Use for local development with DDEV
 // For production, use environment variables
-const API_URL = import.meta.env.VITE_API_URL || 'https://proman.ddev.site/mobile-api';
+const API_URL = import.meta.env.VITE_API_URL || 'https://proman.ddev.site:8443/mobile-api';
 
 export const AppConstants = {
   // API Configuration
