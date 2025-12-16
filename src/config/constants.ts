@@ -3,7 +3,8 @@
 
 // Use for local development with DDEV
 // For production, use environment variables
-const API_URL = import.meta.env.VITE_API_URL || 'https://proman.ddev.site:8443/mobile-api';
+// Default to production API, override with VITE_API_URL for local development
+const API_URL = import.meta.env.VITE_API_URL || 'https://saashmagna.com/mobile-api';
 
 export const AppConstants = {
   // API Configuration
