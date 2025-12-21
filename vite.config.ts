@@ -10,7 +10,8 @@ export default defineConfig({
   },
   server: {
     open: false, // Disable auto-open to prevent xdg-open error on headless servers
-    host: true, // Allow external connections
+    host: 'localhost', // Use localhost to avoid permission issues
+    port: 5173,
   },
 });
 

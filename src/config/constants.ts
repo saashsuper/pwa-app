@@ -1,10 +1,33 @@
 // API Configuration
 // Matches the Flutter app's AppConstants
 
-// Use for local development with DDEV
-// For production, use environment variables
-// Default to production API, override with VITE_API_URL for local development
-const API_URL = import.meta.env.VITE_API_URL || 'https://saashmagna.com/mobile-api';
+// Determine API URL based on environment
+// Development: Use VITE_API_URL from .env.local or default to DDEV URL
+// Production: Use VITE_API_URL from environment or default to production URL
+const getApiUrl = (): string => {
+  // Check if VITE_API_URL is explicitly set (highest priority)
+  if (import.meta.env.VITE_API_URL) {
+    return import.meta.env.VITE_API_URL;
+  }
+  
+  // Check if we're in development mode
+  if (import.meta.env.DEV || import.meta.env.MODE === 'development') {
+    // Default to DDEV local development URL with port 8443
+    return 'https://proman.ddev.site:8443/mobile-api';
+  }
+  
+  // Production fallback
+  return 'https://saashmagna.com/mobile-api';
+};
+
+const API_URL = getApiUrl();
+
+// Log API URL in development for debugging
+if (import.meta.env.DEV) {
+  console.log('🌐 API URL:', API_URL);
+  console.log('🔧 Environment:', import.meta.env.MODE);
+  console.log('📝 VITE_API_URL:', import.meta.env.VITE_API_URL || 'not set');
+}
 
 export const AppConstants = {
   // API Configuration
@@ -12,7 +35,7 @@ export const AppConstants = {
   baseUrl: API_URL.replace('/mobile-api', ''),
 
   // App Information
-  appName: 'PROMAN',
+  appName: 'APM Mobile',
   appSubtitle: 'Property Management',
 
   // Colors (matching Flutter app)

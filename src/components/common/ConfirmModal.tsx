@@ -68,14 +68,16 @@ const ConfirmModal: React.FC<ConfirmModalProps> = ({
             <p className="mb-0">{message}</p>
           </div>
           <div className="modal-footer">
-            <button
-              type="button"
-              className="btn btn-secondary"
-              onClick={onCancel}
-              disabled={isProcessing}
-            >
-              {cancelText}
-            </button>
+            {cancelText && (
+              <button
+                type="button"
+                className="btn btn-secondary"
+                onClick={onCancel}
+                disabled={isProcessing}
+              >
+                {cancelText}
+              </button>
+            )}
             <button
               type="button"
               className={`btn ${getButtonClass()}`}
@@ -99,6 +101,13 @@ const ConfirmModal: React.FC<ConfirmModalProps> = ({
 };
 
 export default ConfirmModal;
+
+
+
+
+
+
+
 
 
 

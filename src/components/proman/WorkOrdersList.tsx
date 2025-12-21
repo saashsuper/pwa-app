@@ -4,6 +4,7 @@ import HeaderTwo from "../../layouts/headers/HeaderTwo";
 import FooterTwo from "../../layouts/footers/FooterTwo";
 import workOrderService, { WorkOrder } from "../../services/workOrderService";
 import AppConstants from "../../config/constants";
+import DragToggle from "../common/DragToggle";
 
 const WorkOrdersList = () => {
   const [workOrders, setWorkOrders] = useState<WorkOrder[]>([]);
@@ -11,6 +12,7 @@ const WorkOrdersList = () => {
   const [error, setError] = useState("");
   const [sortBy, setSortBy] = useState("latest");
   const [filterStatus, setFilterStatus] = useState<string | null>(null);
+  const [resumeToggles, setResumeToggles] = useState<{ [key: number]: boolean }>({});
 
   useEffect(() => {
     loadWorkOrders();
@@ -42,10 +44,61 @@ const WorkOrdersList = () => {
       case 'in progress':
       case 'in_progress':
         return 'warning';
+      case 'on hold':
+      case 'on_hold':
+      case 'paused':
+        return 'warning';
       case 'pending':
-        return 'secondary';
-      default:
+      case 'scheduled':
         return 'info';
+      default:
+        return 'secondary';
+    }
+  };
+
+  const getStatusLabel = (status: string | undefined | null): string => {
+    if (!status || typeof status !== 'string') {
+      return 'N/A';
+    }
+    // Map "On Hold" to "Paused" for display
+    if (status.toLowerCase() === 'on hold' || status.toLowerCase() === 'on_hold') {
+      return 'Paused';
+    }
+    return status;
+  };
+
+  const isPaused = (status: any): boolean => {
+    if (!status) return false;
+    
+    let statusStr = '';
+    if (typeof status === 'string') {
+      statusStr = status;
+    } else if (typeof status === 'object' && status !== null) {
+      statusStr = status.name || status.label || '';
+    } else {
+      statusStr = String(status);
+    }
+
+    const lowerStatus = statusStr.toLowerCase();
+    return lowerStatus === 'on hold' || lowerStatus === 'on_hold' || lowerStatus === 'paused';
+  };
+
+  const handleResume = async (workOrderId: number, checked: boolean) => {
+    if (!checked) {
+      setResumeToggles(prev => ({ ...prev, [workOrderId]: false }));
+      return;
+    }
+
+    try {
+      setError("");
+      setResumeToggles(prev => ({ ...prev, [workOrderId]: true }));
+      await workOrderService.resume(workOrderId);
+      // Reload work orders after resume
+      await loadWorkOrders();
+      setResumeToggles(prev => ({ ...prev, [workOrderId]: false }));
+    } catch (err: any) {
+      setError(err.message || "Failed to resume work order");
+      setResumeToggles(prev => ({ ...prev, [workOrderId]: false }));
     }
   };
 
@@ -125,12 +178,33 @@ const WorkOrdersList = () => {
                       <div className="card-body">
                         <div className="d-flex justify-content-between align-items-start mb-2">
                           <h6 className="mb-0 fw-bold">WO-{workOrder.id}</h6>
-                          {workOrder.job_status?.name && (
-                            <span className={`badge bg-${getStatusColor(workOrder.job_status.name)}`}>
-                              {workOrder.job_status.name}
-                            </span>
-                          )}
+                          {workOrder.job_status && (() => {
+                            const statusName = typeof workOrder.job_status === 'object' 
+                              ? workOrder.job_status.name || workOrder.job_status.label || ''
+                              : workOrder.job_status;
+                            return (
+                              <span className={`badge bg-${getStatusColor(statusName)}`}>
+                                {getStatusLabel(statusName)}
+                              </span>
+                            );
+                          })()}
                         </div>
+                        
+                        {/* Resume Toggle for Paused Work Orders */}
+                        {isPaused(workOrder.job_status) && (
+                          <div className="mb-2">
+                            <small className="text-muted d-block mb-1">
+                              <i className="bi bi-pause-circle me-1 text-warning"></i>
+                              Slide to resume
+                            </small>
+                            <DragToggle
+                              id={`resumeToggle-${workOrder.id}`}
+                              checked={resumeToggles[workOrder.id] || false}
+                              onChange={(checked) => handleResume(workOrder.id, checked)}
+                              variant="warning"
+                            />
+                          </div>
+                        )}
 
                         <p className="mb-2 text-muted small" style={{ 
                           display: '-webkit-box',

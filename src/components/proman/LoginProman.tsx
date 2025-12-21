@@ -81,7 +81,7 @@ const LoginProman = () => {
             <h2 className="mb-2" style={{ color: AppConstants.primaryColor, fontWeight: 'bold' }}>
               {AppConstants.appName}
             </h2>
-            <p className="text-muted mb-4">{AppConstants.appSubtitle}</p>
+            <p className="text-muted mb-4" style={{ fontSize: '1.5rem' }}>{AppConstants.appSubtitle}</p>
           </div>
 
           {/* Login Form */}

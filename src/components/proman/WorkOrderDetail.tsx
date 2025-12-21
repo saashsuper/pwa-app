@@ -4,6 +4,9 @@ import HeaderTwo from "../../layouts/headers/HeaderTwo";
 import FooterTwo from "../../layouts/footers/FooterTwo";
 import workOrderService, { WorkOrder } from "../../services/workOrderService";
 import AppConstants from "../../config/constants";
+import DragToggle from "../common/DragToggle";
+import ConfirmModal from "../common/ConfirmModal";
+import "./WorkOrderDetail.css";
 
 const WorkOrderDetail = () => {
   const { id } = useParams<{ id: string }>();
@@ -11,6 +14,10 @@ const WorkOrderDetail = () => {
   const [workOrder, setWorkOrder] = useState<WorkOrder | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const [resumeToggle, setResumeToggle] = useState(false);
+  const [completeToggle, setCompleteToggle] = useState(false);
+  const [showSuccessModal, setShowSuccessModal] = useState(false);
+  const [successMessage, setSuccessMessage] = useState("");
 
   useEffect(() => {
     if (id) {
@@ -127,8 +134,10 @@ const WorkOrderDetail = () => {
         return 'warning';
       case 'on hold':
       case 'on_hold':
-        return 'secondary';
+      case 'paused':
+        return 'warning';
       case 'pending':
+      case 'scheduled':
         return 'info';
       default:
         return 'secondary';
@@ -138,13 +147,120 @@ const WorkOrderDetail = () => {
   const getStatusLabel = (status: any): string => {
     if (!status) return 'N/A';
     
+    let statusStr = '';
     if (typeof status === 'string') {
-      return status;
+      statusStr = status;
     } else if (typeof status === 'object' && status !== null) {
-      return status.name || status.label || 'N/A';
+      statusStr = status.name || status.label || 'N/A';
+    } else {
+      statusStr = String(status);
+    }
+
+    // Map "On Hold" to "Paused" for display
+    if (statusStr.toLowerCase() === 'on hold' || statusStr.toLowerCase() === 'on_hold') {
+      return 'Paused';
     }
     
-    return String(status);
+    return statusStr;
+  };
+
+  const isPaused = (status: any): boolean => {
+    if (!status) return false;
+    
+    let statusStr = '';
+    if (typeof status === 'string') {
+      statusStr = status;
+    } else if (typeof status === 'object' && status !== null) {
+      statusStr = status.name || status.label || '';
+    } else {
+      statusStr = String(status);
+    }
+
+    const lowerStatus = statusStr.toLowerCase();
+    return lowerStatus === 'on hold' || lowerStatus === 'on_hold' || lowerStatus === 'paused';
+  };
+
+  const handleResume = async (checked: boolean) => {
+    if (!id || !workOrder || !checked) {
+      setResumeToggle(false);
+      return;
+    }
+    
+    try {
+      setError("");
+      setResumeToggle(true);
+      const updated = await workOrderService.resume(Number(id));
+      setWorkOrder(updated);
+      setResumeToggle(false);
+      setSuccessMessage("Work order resumed successfully!");
+      setShowSuccessModal(true);
+    } catch (err: any) {
+      setError(err.message || "Failed to resume work order");
+      setResumeToggle(false);
+    }
+  };
+
+  const isInProgress = (status: any): boolean => {
+    if (!status) return false;
+    
+    let statusStr = '';
+    if (typeof status === 'string') {
+      statusStr = status;
+    } else if (typeof status === 'object' && status !== null) {
+      statusStr = status.name || status.label || '';
+    } else {
+      statusStr = String(status);
+    }
+
+    const lowerStatus = statusStr.toLowerCase();
+    return lowerStatus === 'in progress' || lowerStatus === 'in_progress';
+  };
+
+  const isCompleted = (status: any): boolean => {
+    if (!status) return false;
+    
+    let statusStr = '';
+    if (typeof status === 'string') {
+      statusStr = status;
+    } else if (typeof status === 'object' && status !== null) {
+      statusStr = status.name || status.label || '';
+    } else {
+      statusStr = String(status);
+    }
+
+    const lowerStatus = statusStr.toLowerCase();
+    return lowerStatus === 'completed';
+  };
+
+  const handleComplete = async (checked: boolean) => {
+    if (!id || !workOrder || !checked) {
+      setCompleteToggle(false);
+      return;
+    }
+    
+    try {
+      setError("");
+      setCompleteToggle(true);
+      const updated = await workOrderService.complete(Number(id));
+      setWorkOrder(updated);
+      setCompleteToggle(false);
+      setSuccessMessage("Work order completed successfully! You can now download the work docket.");
+      setShowSuccessModal(true);
+    } catch (err: any) {
+      setError(err.message || "Failed to complete work order");
+      setCompleteToggle(false);
+    }
+  };
+
+  const handleDownloadWorkDocket = async () => {
+    if (!id) return;
+    
+    try {
+      setError("");
+      await workOrderService.downloadWorkDocket(Number(id));
+    } catch (err: any) {
+      setError(err.message || "Failed to download work docket");
+    }
   };
 
   if (loading) {
@@ -213,6 +329,26 @@ const WorkOrderDetail = () => {
               )}
             </div>
 
+            {/* Completed Status Banner */}
+            {isCompleted(workOrder.job_status) && (
+              <div className="alert alert-success d-flex align-items-center mb-3" role="alert">
+                <i className="bi bi-check-circle-fill me-2" style={{ fontSize: '1.5rem' }}></i>
+                <div className="flex-grow-1">
+                  <strong>Work Order Completed</strong>
+                  <p className="mb-0 small">This work order has been completed and cannot be edited.</p>
+                </div>
+                {workOrder.pdf_path && workOrder.pdf_name && (
+                  <button
+                    className="btn btn-success"
+                    onClick={handleDownloadWorkDocket}
+                  >
+                    <i className="bi bi-download me-2"></i>
+                    Download Work Docket
+                  </button>
+                )}
+              </div>
+            )}
+
             {/* Quick Actions */}
             <div className="row g-3 mb-3">
               <div className="col-6">
@@ -264,6 +400,56 @@ const WorkOrderDetail = () => {
                 </div>
               )}
             </div>
+
+            {/* Status Change Toggles - Only show if not completed */}
+            {!isCompleted(workOrder.job_status) && (
+              <div className="card mb-3">
+                <div className="card-body">
+                  <h6 className="mb-3">
+                    <i className="bi bi-sliders me-2" style={{ color: AppConstants.primaryColor }}></i>
+                    Status Actions
+                  </h6>
+                  
+                  {/* Resume Toggle for Paused Work Orders */}
+                  {isPaused(workOrder.job_status) && (
+                    <div className="mb-3">
+                      <div className="d-flex align-items-center mb-2">
+                        <i className="bi bi-pause-circle me-2 text-warning"></i>
+                        <strong>Resume Job</strong>
+                      </div>
+                      <small className="text-muted d-block mb-2">Slide to resume the paused work order</small>
+                      <DragToggle
+                        id="resumeToggle"
+                        checked={resumeToggle}
+                        onChange={handleResume}
+                        variant="warning"
+                      />
+                    </div>
+                  )}
+
+                  {/* Complete Toggle for In Progress Work Orders */}
+                  {isInProgress(workOrder.job_status) && (
+                    <div className="mb-3">
+                      <div className="d-flex align-items-center mb-2">
+                        <i className="bi bi-check-circle me-2 text-success"></i>
+                        <strong>Complete Job</strong>
+                      </div>
+                      <small className="text-muted d-block mb-2">Slide to complete. Work docket will be generated.</small>
+                      <DragToggle
+                        id="completeToggle"
+                        checked={completeToggle}
+                        onChange={handleComplete}
+                        variant="success"
+                      />
+                    </div>
+                  )}
+
+                  {!isPaused(workOrder.job_status) && !isInProgress(workOrder.job_status) && (
+                    <p className="text-muted mb-0 small">No status actions available for this work order.</p>
+                  )}
+                </div>
+              </div>
+            )}
 
             {/* Work Order Information */}
             <div className="card mb-3">
@@ -441,10 +627,139 @@ const WorkOrderDetail = () => {
               </div>
             )}
 
+            {/* Issue Details (if related to an issue) */}
+            {workOrder.block_issue && (
+              <div className="card mb-3">
+                <div className="card-body">
+                  <h6 className="mb-3">
+                    <i className="bi bi-exclamation-triangle me-2" style={{ color: '#dc3545' }}></i>
+                    Related Issue Details
+                  </h6>
+                  <div className="row g-3">
+                    {workOrder.block_issue.id && (
+                      <div className="col-12">
+                        <small className="text-muted d-block mb-1">Issue ID</small>
+                        <div className="fw-bold">#{workOrder.block_issue.id}</div>
+                      </div>
+                    )}
+                    {workOrder.block_issue.title && (
+                      <div className="col-12">
+                        <small className="text-muted d-block mb-1">Issue Title</small>
+                        <div className="fw-bold">{workOrder.block_issue.title}</div>
+                      </div>
+                    )}
+                    {workOrder.block_issue.issue && (
+                      <div className="col-12">
+                        <small className="text-muted d-block mb-1">Issue Description</small>
+                        <div style={{ whiteSpace: 'pre-wrap' }}>{workOrder.block_issue.issue}</div>
+                      </div>
+                    )}
+                    {workOrder.block_issue.description && (
+                      <div className="col-12">
+                        <small className="text-muted d-block mb-1">Additional Details</small>
+                        <div style={{ whiteSpace: 'pre-wrap' }}>{workOrder.block_issue.description}</div>
+                      </div>
+                    )}
+                    <div className="col-12">
+                      <Link 
+                        to={`/issue/${workOrder.block_issue.id}`} 
+                        className="btn btn-sm btn-outline-primary"
+                      >
+                        <i className="bi bi-arrow-right me-2"></i>
+                        View Full Issue Details
+                      </Link>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Work Order Metadata */}
+            <div className="card mb-3">
+              <div className="card-body">
+                <h6 className="mb-3">
+                  <i className="bi bi-info-circle me-2" style={{ color: '#17a2b8' }}></i>
+                  Metadata
+                </h6>
+                <div className="row g-3">
+                  {workOrder.creator && (
+                    <div className="col-6">
+                      <small className="text-muted d-block mb-1">Created By</small>
+                      <div className="fw-bold">{workOrder.creator.name || workOrder.creator.email || 'N/A'}</div>
+                    </div>
+                  )}
+                  {workOrder.updater && (
+                    <div className="col-6">
+                      <small className="text-muted d-block mb-1">Last Updated By</small>
+                      <div className="fw-bold">{workOrder.updater.name || workOrder.updater.email || 'N/A'}</div>
+                    </div>
+                  )}
+                  {workOrder.issuedBy && (
+                    <div className="col-6">
+                      <small className="text-muted d-block mb-1">Issued By</small>
+                      <div className="fw-bold">{workOrder.issuedBy.name || workOrder.issuedBy.email || 'N/A'}</div>
+                    </div>
+                  )}
+                  {workOrder.acceptance_status && (
+                    <div className="col-6">
+                      <small className="text-muted d-block mb-1">Acceptance Status</small>
+                      <div>
+                        <span className={`badge bg-${workOrder.acceptance_status === 'accepted' ? 'success' : workOrder.acceptance_status === 'rejected' ? 'danger' : 'warning'}`}>
+                          {workOrder.acceptance_status.charAt(0).toUpperCase() + workOrder.acceptance_status.slice(1)}
+                        </span>
+                      </div>
+                    </div>
+                  )}
+                  {workOrder.note_for_access && (
+                    <div className="col-12">
+                      <small className="text-muted d-block mb-1">Note for Access</small>
+                      <div style={{ whiteSpace: 'pre-wrap' }}>{workOrder.note_for_access}</div>
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>
+
+            {/* Work Order Files/Attachments Info */}
+            {workOrder.images && workOrder.images.length > 0 && (
+              <div className="card mb-3">
+                <div className="card-body">
+                  <h6 className="mb-3">
+                    <i className="bi bi-paperclip me-2" style={{ color: '#6f42c1' }}></i>
+                    Files & Attachments
+                  </h6>
+                  <div className="row g-3">
+                    <div className="col-6">
+                      <small className="text-muted d-block mb-1">Photos</small>
+                      <div className="fw-bold">
+                        {workOrder.images.length} photo{workOrder.images.length !== 1 ? 's' : ''}
+                      </div>
+                      <Link to={`/work-order/${id}/photos`} className="btn btn-sm btn-outline-primary mt-2">
+                        View Photos
+                      </Link>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
+
             <div className="pb-3"></div>
           </div>
         </div>
       </div>
+
+      {/* Success Modal */}
+      <ConfirmModal
+        show={showSuccessModal}
+        title="Success"
+        message={successMessage}
+        confirmText="OK"
+        cancelText=""
+        confirmButtonVariant="success"
+        onConfirm={() => setShowSuccessModal(false)}
+        onCancel={() => setShowSuccessModal(false)}
+      />
+
       <FooterTwo />
     </>
   );

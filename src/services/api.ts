@@ -8,6 +8,8 @@ const api: AxiosInstance = axios.create({
     'Content-Type': 'application/json',
     'Accept': 'application/json',
   },
+  // Note: We're using Bearer tokens, not cookies, so withCredentials is not needed
+  // withCredentials: true, // Only needed if using cookies/sessions
   // Don't reject on any status code - handle in components
   validateStatus: (status) => status < 500,
 });

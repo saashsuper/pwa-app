@@ -120,3 +120,6 @@ npm run build
 - **CORS errors:** Ensure the backend allows requests from `apapp.saashmagna.com`
 - **Build fails:** Check Node.js version (should be 18+), clear `node_modules` and reinstall
 
+
+
+

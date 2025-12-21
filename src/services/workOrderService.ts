@@ -93,6 +93,8 @@ export interface WorkOrder {
             email?: string;
         };
     }>;
+    pdf_path?: string;
+    pdf_name?: string;
     created_at?: string;
     updated_at?: string;
     [key: string]: any;
@@ -215,6 +217,121 @@ class WorkOrderService {
         } catch (error: any) {
             console.error('Delete note error:', error);
             throw new Error(error.response?.data?.message || error.message || 'Failed to delete note');
+        }
+    }
+
+    /**
+     * Resume a paused work order (changes status from "On Hold" to "In Progress")
+     */
+    async resume(id: number): Promise<WorkOrder> {
+        try {
+            const response = await api.post<{ success: boolean; message: string; data: WorkOrder }>(
+                `${AppConstants.endpoints.workOrderDetail}/${id}/resume`
+            );
+
+            if (response.status === 401) {
+                throw new Error('Authentication failed - please login again');
+            }
+
+            if (response.status === 404) {
+                throw new Error('Work order not found');
+            }
+
+            if (response.data.success) {
+                return response.data.data;
+            }
+
+            throw new Error(response.data?.message || 'Failed to resume work order');
+        } catch (error: any) {
+            console.error('Resume work order error:', error);
+            throw new Error(error.response?.data?.message || error.message || 'Failed to resume work order');
+        }
+    }
+
+    /**
+     * Complete a work order (changes status to "Completed" and generates work docket)
+     */
+    async complete(id: number, comment?: string): Promise<WorkOrder> {
+        try {
+            const response = await api.post<{ success: boolean; message: string; data: WorkOrder }>(
+                `${AppConstants.endpoints.workOrderDetail}/${id}/complete`,
+                comment ? { comment } : {}
+            );
+
+            if (response.status === 401) {
+                throw new Error('Authentication failed - please login again');
+            }
+
+            if (response.status === 404) {
+                throw new Error('Work order not found');
+            }
+
+            if (response.data.success) {
+                return response.data.data;
+            }
+
+            throw new Error(response.data?.message || 'Failed to complete work order');
+        } catch (error: any) {
+            console.error('Complete work order error:', error);
+            throw new Error(error.response?.data?.message || error.message || 'Failed to complete work order');
+        }
+    }
+
+    /**
+     * Download work docket PDF
+     */
+    async downloadWorkDocket(id: number): Promise<void> {
+        try {
+            // Use fetch for blob downloads as axios might have issues with blob responseType
+            const token = localStorage.getItem('auth_token');
+            const response = await fetch(
+                `${AppConstants.apiUrl}${AppConstants.endpoints.workOrderDetail}/${id}/download-docket`,
+                {
+                    method: 'GET',
+                    headers: {
+                        'Authorization': `Bearer ${token}`,
+                        'Accept': 'application/pdf',
+                    },
+                }
+            );
+
+            if (response.status === 401) {
+                throw new Error('Authentication failed - please login again');
+            }
+
+            if (response.status === 404) {
+                throw new Error('Work docket not found. Please ensure the work order is completed.');
+            }
+
+            if (!response.ok) {
+                const errorData = await response.json().catch(() => ({}));
+                throw new Error(errorData.message || `Failed to download work docket: ${response.statusText}`);
+            }
+
+            // Create blob and trigger download
+            const blob = await response.blob();
+            const url = window.URL.createObjectURL(blob);
+            const link = document.createElement('a');
+            link.href = url;
+            
+            // Get filename from Content-Disposition header or use default
+            const contentDisposition = response.headers.get('content-disposition');
+            let filename = `work-docket-${id}.pdf`;
+            if (contentDisposition) {
+                const filenameMatch = contentDisposition.match(/filename="?(.+)"?/i);
+                if (filenameMatch) {
+                    filename = filenameMatch[1];
+                }
+            }
+            
+            link.setAttribute('download', filename);
+            document.body.appendChild(link);
+            link.click();
+            link.remove();
+            window.URL.revokeObjectURL(url);
+        } catch (error: any) {
+            console.error('Download work docket error:', error);
+            throw new Error(error.message || 'Failed to download work docket');
         }
     }
 }
