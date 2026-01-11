@@ -12,8 +12,8 @@ const getApiUrl = (): string => {
   
   // Check if we're in development mode
   if (import.meta.env.DEV || import.meta.env.MODE === 'development') {
-    // Default to DDEV local development URL with port 8443
-    return 'https://proman.ddev.site:8443/mobile-api';
+    // Default to local development URL
+    return 'http://127.0.0.1:32777/mobile-api';
   }
   
   // Production fallback
@@ -35,7 +35,7 @@ export const AppConstants = {
   baseUrl: API_URL.replace('/mobile-api', ''),
 
   // App Information
-  appName: 'APM Mobile',
+  appName: 'Absolute Property Management',
   appSubtitle: 'Property Management',
 
   // Colors (matching Flutter app)

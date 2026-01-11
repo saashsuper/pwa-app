@@ -1,7 +1,8 @@
-import { Link, useNavigate } from "react-router-dom";
+import { Link, useNavigate, useLocation } from "react-router-dom";
 import { useDarkMode } from "../../hooks/useDarkMode";
 import { useAuth } from "../../contexts/AuthContext";
 import { useEffect } from "react";
+import AppConstants from "../../config/constants";
 
  
 
@@ -16,11 +17,25 @@ const HeaderTwo = () => {
   }, []);
 
 	const navigate = useNavigate();
+	const location = useLocation();
 	const { user, logout } = useAuth();
 	const { theme, handleDarkModeToggle } = useDarkMode();
 
 	// Check if user is a contractor
 	const isContractor = user?.user_type?.name?.includes('Contractor') || false;
+
+	// Helper function to check if a path is active
+	const isActive = (path: string) => {
+		if (path === '/work-orders') {
+			// Match /work-orders and /work-order/:id routes
+			return location.pathname === path || location.pathname.startsWith('/work-order/');
+		}
+		if (path === '/inspections') {
+			// Match /inspections and /inspection/:id routes if they exist
+			return location.pathname === path || location.pathname.startsWith('/inspection/');
+		}
+		return location.pathname === path || location.pathname.startsWith(path + '/');
+	};
 
 	const handleLogout = async () => {
 		await logout();
@@ -105,24 +120,56 @@ const HeaderTwo = () => {
 
 					<ul className="sidenav-nav ps-0">
 						<li>
-							<Link to="/dashboard">
+							<Link 
+								to="/dashboard" 
+								className={isActive('/dashboard') ? 'active' : ''}
+								style={isActive('/dashboard') ? { 
+									backgroundColor: `${AppConstants.primaryColor}15`,
+									color: AppConstants.primaryColor,
+									borderLeft: `3px solid ${AppConstants.primaryColor}`
+								} : {}}
+							>
 								<i className="bi bi-house-door"></i> Dashboard
 							</Link>
 						</li>
 						<li>
-							<Link to="/work-orders">
+							<Link 
+								to="/work-orders" 
+								className={isActive('/work-orders') ? 'active' : ''}
+								style={isActive('/work-orders') ? { 
+									backgroundColor: `${AppConstants.primaryColor}15`,
+									color: AppConstants.primaryColor,
+									borderLeft: `3px solid ${AppConstants.primaryColor}`
+								} : {}}
+							>
 								<i className="bi bi-clipboard-check"></i> Work Orders
 							</Link>
 						</li>
 						{!isContractor && (
 							<li>
-								<Link to="/inspections">
+								<Link 
+									to="/inspections" 
+									className={isActive('/inspections') ? 'active' : ''}
+									style={isActive('/inspections') ? { 
+										backgroundColor: `${AppConstants.primaryColor}15`,
+										color: AppConstants.primaryColor,
+										borderLeft: `3px solid ${AppConstants.primaryColor}`
+									} : {}}
+								>
 									<i className="bi bi-search"></i> Inspections
 								</Link>
 							</li>
 						)}
 						<li>
-							<Link to="/profile">
+							<Link 
+								to="/profile" 
+								className={isActive('/profile') ? 'active' : ''}
+								style={isActive('/profile') ? { 
+									backgroundColor: `${AppConstants.primaryColor}15`,
+									color: AppConstants.primaryColor,
+									borderLeft: `3px solid ${AppConstants.primaryColor}`
+								} : {}}
+							>
 								<i className="bi bi-person-circle"></i> Profile
 							</Link>
 						</li>

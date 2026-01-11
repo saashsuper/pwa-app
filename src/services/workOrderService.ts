@@ -69,6 +69,7 @@ export interface WorkOrder {
     preferred_end_date_time?: string;
     deadline_date?: string;
     acceptance_status?: string;
+    rejection_reason?: string;
     images?: Array<{
         id: number;
         image_path?: string;
@@ -114,17 +115,27 @@ class WorkOrderService {
                 throw new Error('Authentication failed - please login again');
             }
 
-            // Handle paginated response (Laravel pagination returns { data: [...], current_page, total, etc. })
-            // Or direct array response
+            // Handle API response structure: { success: true, data: { data: [...], current_page, total, etc. } }
+            // Laravel pagination wraps the paginated data in a data property
+            if (response.data && response.data.success && response.data.data) {
+                // Check if data.data is an array (paginated response)
+                if (Array.isArray(response.data.data.data)) {
+                    return response.data.data.data;
+                }
+                // Check if data.data is already an array (non-paginated but wrapped)
+                if (Array.isArray(response.data.data)) {
+                    return response.data.data;
+                }
+            }
+            
+            // Handle direct array response (fallback)
             if (Array.isArray(response.data)) {
                 return response.data;
-            } else if (response.data && Array.isArray(response.data.data)) {
-                return response.data.data;
-            } else {
-                // Fallback: return empty array if unexpected format
-                console.warn('Unexpected API response format:', response.data);
-                return [];
             }
+            
+            // Fallback: return empty array if unexpected format
+            console.warn('Unexpected API response format:', response.data);
+            return [];
         } catch (error: any) {
             console.error('Get my work orders error:', error);
             throw new Error(error.response?.data?.message || error.message || 'Failed to load work orders');
@@ -221,6 +232,39 @@ class WorkOrderService {
     }
 
     /**
+     * Pause a work order (changes status from "In Progress" to "On Hold")
+     */
+    async pause(id: number, reason?: string): Promise<WorkOrder> {
+        try {
+            const response = await api.post<{ success: boolean; message: string; data: WorkOrder }>(
+                `${AppConstants.endpoints.workOrderDetail}/${id}/pause`,
+                reason ? { reason } : { reason: 'Work order paused by user' }
+            );
+
+            if (response.status === 401) {
+                throw new Error('Authentication failed - please login again');
+            }
+
+            if (response.status === 404) {
+                throw new Error('Work order not found');
+            }
+
+            if (response.status === 422) {
+                throw new Error(response.data?.message || 'Invalid pause request');
+            }
+
+            if (response.data.success) {
+                return response.data.data;
+            }
+
+            throw new Error(response.data?.message || 'Failed to pause work order');
+        } catch (error: any) {
+            console.error('Pause work order error:', error);
+            throw new Error(error.response?.data?.message || error.message || 'Failed to pause work order');
+        }
+    }
+
+    /**
      * Resume a paused work order (changes status from "On Hold" to "In Progress")
      */
     async resume(id: number): Promise<WorkOrder> {
@@ -274,6 +318,121 @@ class WorkOrderService {
         } catch (error: any) {
             console.error('Complete work order error:', error);
             throw new Error(error.response?.data?.message || error.message || 'Failed to complete work order');
+        }
+    }
+
+    /**
+     * Accept a work order (Contractor Admin only)
+     * Only allowed for scheduled work orders
+     */
+    async accept(id: number): Promise<WorkOrder> {
+        try {
+            const response = await api.post<{ success: boolean; message: string; data: WorkOrder }>(
+                `${AppConstants.endpoints.workOrderDetail}/${id}/accept`
+            );
+
+            if (response.status === 401) {
+                throw new Error('Authentication failed - please login again');
+            }
+
+            if (response.status === 403) {
+                throw new Error(response.data?.message || 'You do not have permission to accept work orders');
+            }
+
+            if (response.status === 422) {
+                throw new Error(response.data?.message || 'Cannot accept this work order');
+            }
+
+            if (response.status === 404) {
+                throw new Error('Work order not found');
+            }
+
+            if (response.data.success) {
+                return response.data.data;
+            }
+
+            throw new Error(response.data?.message || 'Failed to accept work order');
+        } catch (error: any) {
+            console.error('Accept work order error:', error);
+            throw new Error(error.response?.data?.message || error.message || 'Failed to accept work order');
+        }
+    }
+
+    /**
+     * Start a work order (changes status from "Accepted" to "In Progress")
+     */
+    async start(id: number): Promise<WorkOrder> {
+        try {
+            const response = await api.post<{ success: boolean; message: string; data: WorkOrder }>(
+                `${AppConstants.endpoints.workOrderDetail}/${id}/start`
+            );
+
+            if (response.status === 401) {
+                throw new Error('Authentication failed - please login again');
+            }
+
+            if (response.status === 403) {
+                throw new Error(response.data?.message || 'You do not have permission to start work orders');
+            }
+
+            if (response.status === 422) {
+                throw new Error(response.data?.message || 'Work order must be accepted before it can be started');
+            }
+
+            if (response.status === 404) {
+                throw new Error('Work order not found');
+            }
+
+            if (response.data.success) {
+                return response.data.data;
+            }
+
+            throw new Error(response.data?.message || 'Failed to start work order');
+        } catch (error: any) {
+            console.error('Start work order error:', error);
+            throw new Error(error.response?.data?.message || error.message || 'Failed to start work order');
+        }
+    }
+
+    /**
+     * Reject a work order (Contractor Admin only)
+     * Only allowed for scheduled work orders
+     * Requires a rejection reason
+     */
+    async reject(id: number, rejectionReason: string): Promise<WorkOrder> {
+        try {
+            const response = await api.post<{ success: boolean; message: string; data: WorkOrder }>(
+                `${AppConstants.endpoints.workOrderDetail}/${id}/reject`,
+                { rejection_reason: rejectionReason }
+            );
+
+            if (response.status === 401) {
+                throw new Error('Authentication failed - please login again');
+            }
+
+            if (response.status === 403) {
+                throw new Error(response.data?.message || 'You do not have permission to reject work orders');
+            }
+
+            if (response.status === 422) {
+                const errorMessage = response.data?.errors?.rejection_reason?.[0] 
+                    || response.data?.message 
+                    || 'Please provide a valid rejection reason (minimum 10 characters)';
+                throw new Error(errorMessage);
+            }
+
+            if (response.status === 404) {
+                throw new Error('Work order not found');
+            }
+
+            if (response.data.success) {
+                return response.data.data;
+            }
+
+            throw new Error(response.data?.message || 'Failed to reject work order');
+        } catch (error: any) {
+            console.error('Reject work order error:', error);
+            throw new Error(error.response?.data?.message || error.response?.data?.errors?.rejection_reason?.[0] || error.message || 'Failed to reject work order');
         }
     }
 

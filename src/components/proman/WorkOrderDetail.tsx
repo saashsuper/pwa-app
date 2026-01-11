@@ -6,18 +6,26 @@ import workOrderService, { WorkOrder } from "../../services/workOrderService";
 import AppConstants from "../../config/constants";
 import DragToggle from "../common/DragToggle";
 import ConfirmModal from "../common/ConfirmModal";
+import { useAuth } from "../../contexts/AuthContext";
 import "./WorkOrderDetail.css";
 
 const WorkOrderDetail = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
+  const { user } = useAuth();
   const [workOrder, setWorkOrder] = useState<WorkOrder | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [resumeToggle, setResumeToggle] = useState(false);
   const [completeToggle, setCompleteToggle] = useState(false);
+  const [startToggle, setStartToggle] = useState(false);
+  const [pauseToggle, setPauseToggle] = useState(false);
   const [showSuccessModal, setShowSuccessModal] = useState(false);
   const [successMessage, setSuccessMessage] = useState("");
+  const [showRejectModal, setShowRejectModal] = useState(false);
+  const [rejectionReason, setRejectionReason] = useState("");
+  const [isProcessingAccept, setIsProcessingAccept] = useState(false);
+  const [isProcessingReject, setIsProcessingReject] = useState(false);
 
   useEffect(() => {
     if (id) {
@@ -232,6 +240,137 @@ const WorkOrderDetail = () => {
     return lowerStatus === 'completed';
   };
 
+  const isScheduled = (status: any): boolean => {
+    if (!status) return false;
+    
+    let statusValue = null;
+    if (typeof status === 'number') {
+      statusValue = status;
+    } else if (typeof status === 'object' && status !== null) {
+      statusValue = status.id || status.value;
+    } else if (typeof status === 'string') {
+      // If status is a string, check if it's "Scheduled" or status 1
+      const lowerStatus = status.toLowerCase();
+      return lowerStatus === 'scheduled';
+    }
+
+    // Status 1 = Scheduled
+    return statusValue === 1;
+  };
+
+  const isAccepted = (status: any): boolean => {
+    if (!status) return false;
+    
+    let statusStr = '';
+    if (typeof status === 'string') {
+      statusStr = status;
+    } else if (typeof status === 'object' && status !== null) {
+      statusStr = status.name || status.label || '';
+    } else if (typeof status === 'number') {
+      // Status 8 = Accepted (based on job_statuses table)
+      return status === 8;
+    } else {
+      statusStr = String(status);
+    }
+
+    const lowerStatus = statusStr.toLowerCase();
+    return lowerStatus === 'accepted';
+  };
+
+  const isContractorAdmin = (): boolean => {
+    return user?.user_type?.name === 'Contractor Admin';
+  };
+
+  const handleAccept = async () => {
+    if (!id) return;
+    
+    try {
+      setIsProcessingAccept(true);
+      setError("");
+      const updated = await workOrderService.accept(Number(id));
+      setWorkOrder(updated);
+      setSuccessMessage("Work order accepted successfully!");
+      setShowSuccessModal(true);
+    } catch (err: any) {
+      setError(err.message || "Failed to accept work order");
+    } finally {
+      setIsProcessingAccept(false);
+    }
+  };
+
+  const handleRejectConfirm = async () => {
+    if (!id || !rejectionReason.trim()) {
+      setError("Please provide a rejection reason (minimum 10 characters)");
+      return;
+    }
+
+    if (rejectionReason.trim().length < 10) {
+      setError("Rejection reason must be at least 10 characters long");
+      return;
+    }
+
+    try {
+      setIsProcessingReject(true);
+      setError("");
+      const updated = await workOrderService.reject(Number(id), rejectionReason.trim());
+      setWorkOrder(updated);
+      setShowRejectModal(false);
+      setRejectionReason("");
+      setSuccessMessage("Work order rejected successfully!");
+      setShowSuccessModal(true);
+    } catch (err: any) {
+      setError(err.message || "Failed to reject work order");
+    } finally {
+      setIsProcessingReject(false);
+    }
+  };
+
+  const handleRejectCancel = () => {
+    setShowRejectModal(false);
+    setRejectionReason("");
+    setError("");
+  };
+
+  const handleStart = async (checked: boolean) => {
+    if (!id || !workOrder || !checked) {
+      setStartToggle(false);
+      return;
+    }
+    
+    try {
+      setError("");
+      setStartToggle(true);
+      const updated = await workOrderService.start(Number(id));
+      setWorkOrder(updated);
+      setStartToggle(false);
+      setSuccessMessage("Work order started successfully!");
+      setShowSuccessModal(true);
+    } catch (err: any) {
+      setError(err.message || "Failed to start work order");
+      setStartToggle(false);
+    }
+  };
+
+  const handlePause = async (checked: boolean) => {
+    if (!id || !workOrder || !checked) {
+      setPauseToggle(false);
+      return;
+    }
+    
+    try {
+      setError("");
+      setPauseToggle(true);
+      const updated = await workOrderService.pause(Number(id));
+      setWorkOrder(updated);
+      setPauseToggle(false);
+      setSuccessMessage("Work order paused successfully!");
+      setShowSuccessModal(true);
+    } catch (err: any) {
+      setError(err.message || "Failed to pause work order");
+      setPauseToggle(false);
+    }
+  };
+
   const handleComplete = async (checked: boolean) => {
     if (!id || !workOrder || !checked) {
       setCompleteToggle(false);
@@ -401,6 +540,46 @@ const WorkOrderDetail = () => {
               )}
             </div>
 
+            {/* Accept/Reject Actions - Only for Contractor Admin on Scheduled Work Orders (status = 1) */}
+            {isContractorAdmin() && isScheduled(workOrder.job_status) && (
+              <div className="card mb-3 border-warning">
+                <div className="card-body">
+                  <h6 className="mb-3">
+                    <i className="bi bi-check-circle me-2" style={{ color: '#28a745' }}></i>
+                    Work Order Acceptance
+                  </h6>
+                  <p className="text-muted small mb-3">This work order is scheduled and awaiting your acceptance or rejection.</p>
+                  <div className="d-flex gap-2">
+                    <button
+                      className="btn btn-success flex-fill"
+                      onClick={handleAccept}
+                      disabled={isProcessingAccept}
+                    >
+                      {isProcessingAccept ? (
+                        <>
+                          <span className="spinner-border spinner-border-sm me-2" role="status"></span>
+                          Processing...
+                        </>
+                      ) : (
+                        <>
+                          <i className="bi bi-check-circle me-2"></i>
+                          Accept Work Order
+                        </>
+                      )}
+                    </button>
+                    <button
+                      className="btn btn-danger flex-fill"
+                      onClick={() => setShowRejectModal(true)}
+                      disabled={isProcessingReject}
+                    >
+                      <i className="bi bi-x-circle me-2"></i>
+                      Reject Work Order
+                    </button>
+                  </div>
+                </div>
+              </div>
+            )}
+
             {/* Status Change Toggles - Only show if not completed */}
             {!isCompleted(workOrder.job_status) && (
               <div className="card mb-3">
@@ -410,41 +589,127 @@ const WorkOrderDetail = () => {
                     Status Actions
                   </h6>
                   
+                  {/* Start Toggle for Accepted Work Orders */}
+                  {isAccepted(workOrder.job_status) && (
+                    <div className="mb-4">
+                      <div className="d-flex align-items-center mb-2">
+                        <div className="status-action-icon-wrapper me-2" style={{ 
+                          backgroundColor: '#e7f1ff', 
+                          borderRadius: '50%', 
+                          width: '32px', 
+                          height: '32px', 
+                          display: 'flex', 
+                          alignItems: 'center', 
+                          justifyContent: 'center' 
+                        }}>
+                          <i className="bi bi-play-circle-fill" style={{ color: '#0d6efd', fontSize: '18px' }}></i>
+                        </div>
+                        <div>
+                          <strong style={{ fontSize: '16px' }}>Start Job</strong>
+                          <small className="text-muted d-block" style={{ fontSize: '12px' }}>Slide to start the work order</small>
+                        </div>
+                      </div>
+                      <DragToggle
+                        id="startToggle"
+                        checked={startToggle}
+                        onChange={handleStart}
+                        variant="primary"
+                        height="3rem"
+                      />
+                    </div>
+                  )}
+
                   {/* Resume Toggle for Paused Work Orders */}
                   {isPaused(workOrder.job_status) && (
-                    <div className="mb-3">
+                    <div className="mb-4">
                       <div className="d-flex align-items-center mb-2">
-                        <i className="bi bi-pause-circle me-2 text-warning"></i>
-                        <strong>Resume Job</strong>
+                        <div className="status-action-icon-wrapper me-2" style={{ 
+                          backgroundColor: '#cffafe', 
+                          borderRadius: '50%', 
+                          width: '32px', 
+                          height: '32px', 
+                          display: 'flex', 
+                          alignItems: 'center', 
+                          justifyContent: 'center' 
+                        }}>
+                          <i className="bi bi-play-circle-fill" style={{ color: '#06b6d4', fontSize: '18px' }}></i>
+                        </div>
+                        <div>
+                          <strong style={{ fontSize: '16px' }}>Resume Job</strong>
+                          <small className="text-muted d-block" style={{ fontSize: '12px' }}>Slide to resume the paused work order</small>
+                        </div>
                       </div>
-                      <small className="text-muted d-block mb-2">Slide to resume the paused work order</small>
                       <DragToggle
                         id="resumeToggle"
                         checked={resumeToggle}
                         onChange={handleResume}
-                        variant="warning"
+                        variant="info"
+                        height="3rem"
                       />
                     </div>
                   )}
 
-                  {/* Complete Toggle for In Progress Work Orders */}
+                  {/* Pause Toggle for In Progress Work Orders */}
                   {isInProgress(workOrder.job_status) && (
-                    <div className="mb-3">
-                      <div className="d-flex align-items-center mb-2">
-                        <i className="bi bi-check-circle me-2 text-success"></i>
-                        <strong>Complete Job</strong>
+                    <>
+                      <div className="mb-4">
+                        <div className="d-flex align-items-center mb-2">
+                          <div className="status-action-icon-wrapper me-2" style={{ 
+                            backgroundColor: '#fff3e0', 
+                            borderRadius: '50%', 
+                            width: '32px', 
+                            height: '32px', 
+                            display: 'flex', 
+                            alignItems: 'center', 
+                            justifyContent: 'center' 
+                          }}>
+                            <i className="bi bi-pause-circle-fill" style={{ color: '#ff9800', fontSize: '18px' }}></i>
+                          </div>
+                          <div>
+                            <strong style={{ fontSize: '16px' }}>Pause Job</strong>
+                            <small className="text-muted d-block" style={{ fontSize: '12px' }}>Slide to pause the work order</small>
+                          </div>
+                        </div>
+                        <DragToggle
+                          id="pauseToggle"
+                          checked={pauseToggle}
+                          onChange={handlePause}
+                          variant="warning"
+                          height="3rem"
+                        />
                       </div>
-                      <small className="text-muted d-block mb-2">Slide to complete. Work docket will be generated.</small>
-                      <DragToggle
-                        id="completeToggle"
-                        checked={completeToggle}
-                        onChange={handleComplete}
-                        variant="success"
-                      />
-                    </div>
+
+                      {/* Complete Toggle for In Progress Work Orders */}
+                      <div className="mb-4">
+                        <div className="d-flex align-items-center mb-2">
+                          <div className="status-action-icon-wrapper me-2" style={{ 
+                            backgroundColor: '#d1fae5', 
+                            borderRadius: '50%', 
+                            width: '32px', 
+                            height: '32px', 
+                            display: 'flex', 
+                            alignItems: 'center', 
+                            justifyContent: 'center' 
+                          }}>
+                            <i className="bi bi-check-circle-fill" style={{ color: '#10b981', fontSize: '18px' }}></i>
+                          </div>
+                          <div>
+                            <strong style={{ fontSize: '16px' }}>Complete Job</strong>
+                            <small className="text-muted d-block" style={{ fontSize: '12px' }}>Slide to complete. Work docket will be generated.</small>
+                          </div>
+                        </div>
+                        <DragToggle
+                          id="completeToggle"
+                          checked={completeToggle}
+                          onChange={handleComplete}
+                          variant="success"
+                          height="3rem"
+                        />
+                      </div>
+                    </>
                   )}
 
-                  {!isPaused(workOrder.job_status) && !isInProgress(workOrder.job_status) && (
+                  {!isAccepted(workOrder.job_status) && !isPaused(workOrder.job_status) && !isInProgress(workOrder.job_status) && (
                     <p className="text-muted mb-0 small">No status actions available for this work order.</p>
                   )}
                 </div>
@@ -485,16 +750,6 @@ const WorkOrderDetail = () => {
                       <div>
                         <span className={`badge bg-${getPriorityColor(workOrder.priority)}`}>
                           {getPriorityLabel(workOrder.priority) || 'N/A'}
-                        </span>
-                      </div>
-                    </div>
-                  )}
-                  {workOrder.acceptance_status && (
-                    <div className="col-6">
-                      <small className="text-muted d-block mb-1">Acceptance Status</small>
-                      <div>
-                        <span className={`badge bg-${workOrder.acceptance_status === 'accepted' ? 'success' : workOrder.acceptance_status === 'rejected' ? 'danger' : 'warning'}`}>
-                          {workOrder.acceptance_status.charAt(0).toUpperCase() + workOrder.acceptance_status.slice(1)}
                         </span>
                       </div>
                     </div>
@@ -700,16 +955,6 @@ const WorkOrderDetail = () => {
                       <div className="fw-bold">{workOrder.issuedBy.name || workOrder.issuedBy.email || 'N/A'}</div>
                     </div>
                   )}
-                  {workOrder.acceptance_status && (
-                    <div className="col-6">
-                      <small className="text-muted d-block mb-1">Acceptance Status</small>
-                      <div>
-                        <span className={`badge bg-${workOrder.acceptance_status === 'accepted' ? 'success' : workOrder.acceptance_status === 'rejected' ? 'danger' : 'warning'}`}>
-                          {workOrder.acceptance_status.charAt(0).toUpperCase() + workOrder.acceptance_status.slice(1)}
-                        </span>
-                      </div>
-                    </div>
-                  )}
                   {workOrder.note_for_access && (
                     <div className="col-12">
                       <small className="text-muted d-block mb-1">Note for Access</small>
@@ -759,6 +1004,83 @@ const WorkOrderDetail = () => {
         onConfirm={() => setShowSuccessModal(false)}
         onCancel={() => setShowSuccessModal(false)}
       />
+
+      {/* Reject Work Order Modal */}
+      {showRejectModal && (
+        <div 
+          className="modal fade show" 
+          style={{ display: 'block', backgroundColor: 'rgba(0,0,0,0.5)' }} 
+          tabIndex={-1}
+          onClick={(e) => {
+            if (e.target === e.currentTarget && !isProcessingReject) {
+              handleRejectCancel();
+            }
+          }}
+        >
+          <div className="modal-dialog modal-dialog-centered">
+            <div className="modal-content">
+              <div className="modal-header bg-danger text-white">
+                <h5 className="modal-title">
+                  <i className="bi bi-exclamation-triangle me-2"></i>
+                  Reject Work Order
+                </h5>
+                <button
+                  type="button"
+                  className="btn-close btn-close-white"
+                  onClick={handleRejectCancel}
+                  aria-label="Close"
+                  disabled={isProcessingReject}
+                ></button>
+              </div>
+              <div className="modal-body">
+                <p className="mb-3">Please provide a reason for rejecting this work order (minimum 10 characters):</p>
+                <textarea
+                  className="form-control"
+                  rows={4}
+                  value={rejectionReason}
+                  onChange={(e) => setRejectionReason(e.target.value)}
+                  placeholder="Enter rejection reason..."
+                  disabled={isProcessingReject}
+                  minLength={10}
+                />
+                {error && (
+                  <div className="alert alert-danger mt-2 mb-0 small">
+                    {error}
+                  </div>
+                )}
+              </div>
+              <div className="modal-footer">
+                <button
+                  type="button"
+                  className="btn btn-secondary"
+                  onClick={handleRejectCancel}
+                  disabled={isProcessingReject}
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  className="btn btn-danger"
+                  onClick={handleRejectConfirm}
+                  disabled={isProcessingReject || rejectionReason.trim().length < 10}
+                >
+                  {isProcessingReject ? (
+                    <>
+                      <span className="spinner-border spinner-border-sm me-2" role="status"></span>
+                      Processing...
+                    </>
+                  ) : (
+                    <>
+                      <i className="bi bi-x-circle me-2"></i>
+                      Reject Work Order
+                    </>
+                  )}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
       <FooterTwo />
     </>

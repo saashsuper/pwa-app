@@ -4,7 +4,7 @@ interface DragToggleProps {
   checked: boolean;
   onChange: (checked: boolean) => void;
   disabled?: boolean;
-  variant?: 'warning' | 'success' | 'primary';
+  variant?: 'warning' | 'success' | 'primary' | 'info' | 'danger';
   id?: string;
   height?: string;
 }
@@ -23,9 +23,11 @@ const DragToggle: React.FC<DragToggleProps> = ({
   const thumbRef = useRef<HTMLDivElement>(null);
 
   const variantColors = {
-    primary: { checked: '#0d6efd', unchecked: '#dee2e6' },
-    warning: { checked: '#ffc107', unchecked: '#dee2e6' },
-    success: { checked: '#198754', unchecked: '#dee2e6' },
+    primary: { checked: '#0d6efd', unchecked: '#e7f1ff', checkedText: '#ffffff', uncheckedText: '#0d6efd' },
+    warning: { checked: '#ff9800', unchecked: '#fff3e0', checkedText: '#ffffff', uncheckedText: '#ff9800' },
+    success: { checked: '#10b981', unchecked: '#d1fae5', checkedText: '#ffffff', uncheckedText: '#10b981' },
+    info: { checked: '#06b6d4', unchecked: '#cffafe', checkedText: '#ffffff', uncheckedText: '#06b6d4' },
+    danger: { checked: '#ef4444', unchecked: '#fee2e2', checkedText: '#ffffff', uncheckedText: '#ef4444' },
   };
 
   const currentColor = variantColors[variant];
@@ -139,6 +141,13 @@ const DragToggle: React.FC<DragToggleProps> = ({
   const maxPosition = trackWidth > 0 ? trackWidth - thumbSizePx - padding * 2 : 0;
   const leftPosition = isDragging ? dragPosition : (checked ? maxPosition : 0);
 
+  const currentBgColor = checked && !isDragging ? currentColor.checked : currentColor.unchecked;
+  const currentBorderColor = checked && !isDragging ? currentColor.checked : currentColor.unchecked;
+  const thumbBgColor = '#ffffff';
+  const thumbShadow = checked && !isDragging 
+    ? `0 2px 8px rgba(0, 0, 0, 0.2), 0 0 0 2px ${currentColor.checked}20` 
+    : '0 2px 4px rgba(0, 0, 0, 0.1)';
+
   return (
     <div
       ref={toggleRef}
@@ -156,14 +165,18 @@ const DragToggle: React.FC<DragToggleProps> = ({
       style={{
         width: '100%',
         height: height,
-        backgroundColor: checked && !isDragging ? currentColor.checked : currentColor.unchecked,
-        borderRadius: '0.25rem',
+        backgroundColor: currentBgColor,
+        borderRadius: '12px',
         position: 'relative',
-        cursor: disabled ? 'not-allowed' : 'grab',
-        border: `1px solid ${checked && !isDragging ? currentColor.checked : '#adb5bd'}`,
-        transition: isDragging ? 'none' : 'background-color 0.2s ease, border-color 0.2s ease',
+        cursor: disabled ? 'not-allowed' : isDragging ? 'grabbing' : 'grab',
+        border: `2px solid ${currentBorderColor}`,
+        transition: isDragging ? 'none' : 'background-color 0.3s ease, border-color 0.3s ease, box-shadow 0.3s ease',
         opacity: disabled ? 0.6 : 1,
         userSelect: 'none',
+        overflow: 'hidden',
+        boxShadow: checked && !isDragging 
+          ? `0 2px 8px ${currentColor.checked}40` 
+          : '0 1px 3px rgba(0, 0, 0, 0.1)',
       }}
     >
       <div
@@ -172,17 +185,31 @@ const DragToggle: React.FC<DragToggleProps> = ({
           position: 'absolute',
           width: thumbSize,
           height: thumbSize,
-          backgroundColor: '#fff',
-          borderRadius: '0.125rem',
+          backgroundColor: thumbBgColor,
+          borderRadius: '50%',
           top: '50%',
           left: `${Math.max(0, Math.min(100, (leftPosition / Math.max(1, trackWidth)) * 100))}%`,
           transform: 'translateY(-50%)',
-          transition: isDragging ? 'none' : 'left 0.2s ease',
-          boxShadow: '0 0.125rem 0.25rem rgba(0, 0, 0, 0.15)',
+          transition: isDragging ? 'none' : 'left 0.3s cubic-bezier(0.4, 0, 0.2, 1), box-shadow 0.3s ease',
+          boxShadow: thumbShadow,
           marginLeft: '0.25rem',
           pointerEvents: 'none',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
         }}
-      />
+      >
+        {checked && (
+          <div
+            style={{
+              width: '8px',
+              height: '8px',
+              borderRadius: '50%',
+              backgroundColor: currentColor.checked,
+            }}
+          />
+        )}
+      </div>
     </div>
   );
 };
