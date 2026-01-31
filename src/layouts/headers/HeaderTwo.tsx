@@ -1,7 +1,8 @@
 import { Link, useNavigate, useLocation } from "react-router-dom";
 import { useDarkMode } from "../../hooks/useDarkMode";
 import { useAuth } from "../../contexts/AuthContext";
-import { useEffect } from "react";
+import { useNotifications } from "../../contexts/NotificationsContext";
+import { useEffect, useRef, useState } from "react";
 import AppConstants from "../../config/constants";
 
  
@@ -20,9 +21,23 @@ const HeaderTwo = () => {
 	const location = useLocation();
 	const { user, logout } = useAuth();
 	const { theme, handleDarkModeToggle } = useDarkMode();
+	const { notifications, removeNotification, clearAll, unreadCount } = useNotifications();
+	const [dropdownOpen, setDropdownOpen] = useState(false);
+	const dropdownRef = useRef<HTMLDivElement>(null);
 
 	// Check if user is a contractor
 	const isContractor = user?.user_type?.name?.includes('Contractor') || false;
+
+	// Close dropdown when clicking outside
+	useEffect(() => {
+		const handleClickOutside = (e: MouseEvent) => {
+			if (dropdownRef.current && !dropdownRef.current.contains(e.target as Node)) {
+				setDropdownOpen(false);
+			}
+		};
+		document.addEventListener("mousedown", handleClickOutside);
+		return () => document.removeEventListener("mousedown", handleClickOutside);
+	}, []);
 
 	// Helper function to check if a path is active
 	const isActive = (path: string) => {
@@ -58,16 +73,118 @@ const HeaderTwo = () => {
 							</Link>
 						</div>
 
-						<div
-							className="navbar--toggler"
-							id="affanNavbarToggler"
-							data-bs-toggle="offcanvas"
-							data-bs-target="#affanOffcanvas"
-							aria-controls="affanOffcanvas"
-						>
-							<span className="d-block"></span>
-							<span className="d-block"></span>
-							<span className="d-block"></span>
+						<div className="d-flex align-items-center gap-2">
+							{/* Notification bell with counter and dropdown */}
+							<div className="position-relative" ref={dropdownRef}>
+								<button
+									type="button"
+									className="btn btn-link text-dark p-2 position-relative border-0 d-flex align-items-center justify-content-center"
+									onClick={() => setDropdownOpen((o) => !o)}
+									aria-label="Notifications"
+									style={{ width: '2.5rem', height: '2.5rem' }}
+								>
+									<i className="bi bi-bell-fill" style={{ fontSize: '1.4rem' }}></i>
+									{unreadCount > 0 && (
+										<span
+											className="position-absolute badge rounded-pill bg-danger d-flex align-items-center justify-content-center"
+											style={{
+												fontSize: '0.6rem',
+												minWidth: '1rem',
+												height: '1rem',
+												padding: 0,
+												top: '2px',
+												right: '2px',
+												lineHeight: 1,
+											}}
+										>
+											{unreadCount > 99 ? '99+' : unreadCount}
+										</span>
+									)}
+								</button>
+								{dropdownOpen && (
+									<div
+										className="position-absolute end-0 mt-1 shadow rounded border bg-white"
+										style={{ width: '320px', maxWidth: '95vw', maxHeight: '70vh', zIndex: 1050 }}
+									>
+										<div className="d-flex align-items-center justify-content-between px-3 py-2 border-bottom">
+											<strong>Notifications</strong>
+											{notifications.length > 0 && (
+												<button
+													type="button"
+													className="btn btn-sm btn-outline-secondary"
+													onClick={() => { clearAll(); setDropdownOpen(false); }}
+												>
+													Clear all
+												</button>
+											)}
+										</div>
+										<div style={{ overflowY: 'auto', maxHeight: '50vh' }}>
+											{notifications.length === 0 ? (
+												<div className="p-3 text-muted text-center small">No notifications</div>
+											) : (
+												notifications.map((n) => (
+													<div
+														key={n.id}
+														className="d-flex align-items-start gap-2 px-3 py-2 border-bottom border-1"
+														style={{ borderColor: 'rgba(0,0,0,0.06)' }}
+													>
+														<div className="flex-grow-1 min-width-0">
+															{n.url ? (
+																<div
+																	role="button"
+																	tabIndex={0}
+																	className="text-dark text-decoration-none d-block cursor-pointer"
+																	style={{ cursor: 'pointer' }}
+																	onClick={(e) => {
+																		e.preventDefault();
+																		setDropdownOpen(false);
+																		navigate(n.url!);
+																	}}
+																	onKeyDown={(e) => e.key === 'Enter' && (e.currentTarget as HTMLElement).click()}
+																>
+																	<div className="fw-semibold small text-truncate">{n.title}</div>
+																	<div className="small text-muted text-truncate">{n.body}</div>
+																	<div className="small text-muted mt-1">
+																		{new Date(n.createdAt).toLocaleString()}
+																	</div>
+																</div>
+															) : (
+																<>
+																	<div className="fw-semibold small text-truncate">{n.title}</div>
+																	<div className="small text-muted text-truncate">{n.body}</div>
+																	<div className="small text-muted mt-1">
+																		{new Date(n.createdAt).toLocaleString()}
+																	</div>
+																</>
+															)}
+														</div>
+														<button
+															type="button"
+															className="btn btn-sm btn-link text-muted p-0 align-self-start"
+															onClick={() => removeNotification(n.id)}
+															aria-label="Dismiss"
+														>
+															<i className="bi bi-x-lg"></i>
+														</button>
+													</div>
+												))
+											)}
+										</div>
+									</div>
+								)}
+							</div>
+
+							<div
+								className="navbar--toggler"
+								id="affanNavbarToggler"
+								data-bs-toggle="offcanvas"
+								data-bs-target="#affanOffcanvas"
+								aria-controls="affanOffcanvas"
+							>
+								<span className="d-block"></span>
+								<span className="d-block"></span>
+								<span className="d-block"></span>
+							</div>
 						</div>
 					</div>
 				</div>

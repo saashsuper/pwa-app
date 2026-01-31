@@ -3,7 +3,6 @@ import { Link } from "react-router-dom";
 import HeaderTwo from "../../layouts/headers/HeaderTwo";
 import FooterTwo from "../../layouts/footers/FooterTwo";
 import workOrderService, { WorkOrder } from "../../services/workOrderService";
-import AppConstants from "../../config/constants";
 import DragToggle from "../common/DragToggle";
 
 const WorkOrdersList = () => {
@@ -11,7 +10,7 @@ const WorkOrdersList = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [sortBy, setSortBy] = useState("latest");
-  const [filterStatus, setFilterStatus] = useState<string | null>(null);
+  const [filterStatus, setFilterStatus] = useState<string>("active"); // "active" = non-completed, "all", or specific status
   const [resumeToggles, setResumeToggles] = useState<{ [key: number]: boolean }>({});
 
   useEffect(() => {
@@ -33,6 +32,50 @@ const WorkOrdersList = () => {
       setLoading(false);
     }
   };
+
+  const getStatusName = (wo: WorkOrder): string => {
+    const js = wo.job_status;
+    if (!js) return '';
+    if (typeof js === 'object' && js !== null) {
+      const name = (js as { name?: string; label?: string }).name || (js as { name?: string; label?: string }).label;
+      return (name || '').toString().toLowerCase().trim();
+    }
+    return String(js).toLowerCase().trim();
+  };
+
+  const getPriorityRank = (wo: WorkOrder): number => {
+    const p = wo.priority;
+    const label = typeof p === 'object' && p ? (p.label || (p as any).priority || '') : String(p || '');
+    const lower = label.toLowerCase();
+    if (lower === 'high' || lower === 'urgent') return 3;
+    if (lower === 'medium') return 2;
+    return 1;
+  };
+
+  const COMPLETED_STATUSES = ['completed', 'cancelled', 'rejected'];
+
+  const displayedWorkOrders = (() => {
+    let list = [...workOrders];
+
+    if (filterStatus === 'active') {
+      list = list.filter((wo) => !COMPLETED_STATUSES.includes(getStatusName(wo)));
+    } else if (filterStatus === 'all') {
+      // Show all - no filter
+    } else if (filterStatus) {
+      const target = filterStatus.toLowerCase();
+      list = list.filter((wo) => getStatusName(wo) === target);
+    }
+
+    if (sortBy === 'latest') {
+      list.sort((a, b) => (new Date(b.created_at || 0).getTime() - new Date(a.created_at || 0).getTime()));
+    } else if (sortBy === 'oldest') {
+      list.sort((a, b) => (new Date(a.created_at || 0).getTime() - new Date(b.created_at || 0).getTime()));
+    } else if (sortBy === 'priority') {
+      list.sort((a, b) => getPriorityRank(b) - getPriorityRank(a));
+    }
+
+    return list;
+  })();
 
   const getStatusColor = (status: string | undefined | null): string => {
     if (!status || typeof status !== 'string') {
@@ -128,7 +171,8 @@ const WorkOrdersList = () => {
               <div>
                 <h4 className="mb-1">My Work Orders</h4>
                 <p className="mb-0 text-muted small">
-                  {workOrders.length} work order{workOrders.length !== 1 ? 's' : ''}
+                  {displayedWorkOrders.length} work order{displayedWorkOrders.length !== 1 ? 's' : ''}
+                  {filterStatus !== 'all' && filterStatus !== 'active' && ` (filtered)`}
                 </p>
               </div>
               <button
@@ -162,17 +206,23 @@ const WorkOrdersList = () => {
                 </div>
                 <p className="mt-2 text-muted">Loading work orders...</p>
               </div>
-            ) : workOrders.length === 0 ? (
+            ) : displayedWorkOrders.length === 0 ? (
               /* Empty State */
               <div className="text-center py-5">
                 <i className="bi bi-inbox" style={{ fontSize: '64px', color: '#ccc' }}></i>
                 <h5 className="mt-3">No Work Orders Found</h5>
-                <p className="text-muted">You don't have any work orders assigned yet.</p>
+                <p className="text-muted">
+                  {filterStatus !== 'all' && filterStatus !== 'active'
+                    ? 'No work orders match the selected filter.'
+                    : filterStatus === 'active'
+                    ? "You don't have any active work orders assigned yet."
+                    : "You don't have any work orders assigned yet."}
+                </p>
               </div>
             ) : (
               /* Work Orders List */
               <div className="row g-3">
-                {workOrders.map((workOrder) => (
+                {displayedWorkOrders.map((workOrder) => (
                   <div key={workOrder.id} className="col-12">
                     <div className="card shadow-sm">
                       <div className="card-body">
@@ -269,13 +319,13 @@ const WorkOrdersList = () => {
         id="filterOffcanvas"
         aria-labelledby="filterOffcanvasLabel"
       >
-        <div className="offcanvas-header">
-          <h5 className="offcanvas-title" id="filterOffcanvasLabel">
+        <div className="offcanvas-header d-flex justify-content-between align-items-center">
+          <h5 className="offcanvas-title mb-0 me-3 flex-grow-1" id="filterOffcanvasLabel">
             Sort & Filter
           </h5>
           <button
             type="button"
-            className="btn-close"
+            className="btn-close flex-shrink-0"
             data-bs-dismiss="offcanvas"
             aria-label="Close"
           ></button>
@@ -287,10 +337,7 @@ const WorkOrdersList = () => {
               <button
                 key={sort}
                 className={`btn btn-sm ${sortBy === sort ? 'btn-primary' : 'btn-outline-primary'}`}
-                onClick={() => {
-                  setSortBy(sort);
-                  // Implement sorting logic here
-                }}
+                onClick={() => setSortBy(sort)}
               >
                 {sort.charAt(0).toUpperCase() + sort.slice(1)}
               </button>
@@ -298,29 +345,38 @@ const WorkOrdersList = () => {
           </div>
 
           <h6>Filter by Status</h6>
-          <div className="d-flex flex-wrap gap-2">
+          <div className="d-flex flex-wrap gap-2 mb-4">
             <button
-              className={`btn btn-sm ${filterStatus === null ? 'btn-primary' : 'btn-outline-primary'}`}
-              onClick={() => {
-                setFilterStatus(null);
-                // Implement filter logic here
-              }}
+              className={`btn btn-sm ${filterStatus === 'active' ? 'btn-primary' : 'btn-outline-primary'}`}
+              onClick={() => setFilterStatus('active')}
+            >
+              Active
+            </button>
+            <button
+              className={`btn btn-sm ${filterStatus === 'all' ? 'btn-primary' : 'btn-outline-primary'}`}
+              onClick={() => setFilterStatus('all')}
             >
               All
             </button>
-            {['Pending', 'In Progress', 'Completed'].map((status) => (
+            {['Scheduled', 'Accepted', 'In Progress', 'Completed', 'On Hold'].map((status) => (
               <button
                 key={status}
                 className={`btn btn-sm ${filterStatus === status ? 'btn-primary' : 'btn-outline-primary'}`}
-                onClick={() => {
-                  setFilterStatus(status);
-                  // Implement filter logic here
-                }}
+                onClick={() => setFilterStatus(status)}
               >
                 {status}
               </button>
             ))}
           </div>
+
+          <button
+            type="button"
+            className="btn btn-primary w-100"
+            data-bs-dismiss="offcanvas"
+          >
+            <i className="bi bi-check-lg me-2"></i>
+            Apply
+          </button>
         </div>
       </div>
 

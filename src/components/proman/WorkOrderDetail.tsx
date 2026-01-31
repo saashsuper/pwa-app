@@ -173,18 +173,15 @@ const WorkOrderDetail = () => {
   };
 
   const isPaused = (status: any): boolean => {
-    if (!status) return false;
-    
-    let statusStr = '';
-    if (typeof status === 'string') {
-      statusStr = status;
-    } else if (typeof status === 'object' && status !== null) {
-      statusStr = status.name || status.label || '';
-    } else {
-      statusStr = String(status);
+    if (status == null) return false;
+    if (typeof status === 'object' && status !== null) {
+      const name = (status.name || status.label || '').toLowerCase();
+      return name === 'on hold' || name === 'on_hold' || name === 'paused';
     }
-
-    const lowerStatus = statusStr.toLowerCase();
+    if (typeof status === 'number') {
+      return status === 5 || status === 6; // On Hold (ID varies by seed order)
+    }
+    const lowerStatus = String(status).toLowerCase();
     return lowerStatus === 'on hold' || lowerStatus === 'on_hold' || lowerStatus === 'paused';
   };
 
@@ -209,18 +206,15 @@ const WorkOrderDetail = () => {
   };
 
   const isInProgress = (status: any): boolean => {
-    if (!status) return false;
-    
-    let statusStr = '';
-    if (typeof status === 'string') {
-      statusStr = status;
-    } else if (typeof status === 'object' && status !== null) {
-      statusStr = status.name || status.label || '';
-    } else {
-      statusStr = String(status);
+    if (status == null) return false;
+    if (typeof status === 'object' && status !== null) {
+      const name = (status.name || status.label || '').toLowerCase();
+      return name === 'in progress' || name === 'in_progress';
     }
-
-    const lowerStatus = statusStr.toLowerCase();
+    if (typeof status === 'number') {
+      return status === 3; // In Progress
+    }
+    const lowerStatus = String(status).toLowerCase();
     return lowerStatus === 'in progress' || lowerStatus === 'in_progress';
   };
 
@@ -259,22 +253,20 @@ const WorkOrderDetail = () => {
   };
 
   const isAccepted = (status: any): boolean => {
-    if (!status) return false;
+    if (status == null) return false;
     
-    let statusStr = '';
     if (typeof status === 'string') {
-      statusStr = status;
-    } else if (typeof status === 'object' && status !== null) {
-      statusStr = status.name || status.label || '';
-    } else if (typeof status === 'number') {
-      // Status 8 = Accepted (based on job_statuses table)
-      return status === 8;
-    } else {
-      statusStr = String(status);
+      return status.toLowerCase() === 'accepted';
     }
-
-    const lowerStatus = statusStr.toLowerCase();
-    return lowerStatus === 'accepted';
+    if (typeof status === 'object' && status !== null) {
+      const name = (status.name || status.label || '').toLowerCase();
+      return name === 'accepted';
+    }
+    if (typeof status === 'number') {
+      // Accepted status ID (can be 2 or 8 depending on seed order)
+      return status === 2 || status === 8;
+    }
+    return String(status).toLowerCase() === 'accepted';
   };
 
   const isContractorAdmin = (): boolean => {
@@ -453,10 +445,10 @@ const WorkOrderDetail = () => {
               <div>
                 <button
                   className="btn btn-sm btn-outline-secondary mb-2"
-                  onClick={() => navigate(-1)}
+                  onClick={() => navigate('/work-orders')}
                 >
                   <i className="bi bi-arrow-left me-2"></i>
-                  Back
+                  Back to list
                 </button>
                 <h4 className="mb-1">Work Order Details</h4>
                 <p className="mb-0 text-muted small">{workOrder.ref_no || `WO-${workOrder.id}`}</p>
@@ -581,7 +573,7 @@ const WorkOrderDetail = () => {
             )}
 
             {/* Status Change Toggles - Only show if not completed */}
-            {!isCompleted(workOrder.job_status) && (
+            {!isCompleted(workOrder.job_status ?? workOrder.status) && (
               <div className="card mb-3">
                 <div className="card-body">
                   <h6 className="mb-3">
@@ -590,7 +582,7 @@ const WorkOrderDetail = () => {
                   </h6>
                   
                   {/* Start Toggle for Accepted Work Orders */}
-                  {isAccepted(workOrder.job_status) && (
+                  {isAccepted(workOrder.job_status ?? workOrder.status) && (
                     <div className="mb-4">
                       <div className="d-flex align-items-center mb-2">
                         <div className="status-action-icon-wrapper me-2" style={{ 
@@ -620,7 +612,7 @@ const WorkOrderDetail = () => {
                   )}
 
                   {/* Resume Toggle for Paused Work Orders */}
-                  {isPaused(workOrder.job_status) && (
+                  {isPaused(workOrder.job_status ?? workOrder.status) && (
                     <div className="mb-4">
                       <div className="d-flex align-items-center mb-2">
                         <div className="status-action-icon-wrapper me-2" style={{ 
@@ -650,7 +642,7 @@ const WorkOrderDetail = () => {
                   )}
 
                   {/* Pause Toggle for In Progress Work Orders */}
-                  {isInProgress(workOrder.job_status) && (
+                  {isInProgress(workOrder.job_status ?? workOrder.status) && (
                     <>
                       <div className="mb-4">
                         <div className="d-flex align-items-center mb-2">
@@ -709,7 +701,7 @@ const WorkOrderDetail = () => {
                     </>
                   )}
 
-                  {!isAccepted(workOrder.job_status) && !isPaused(workOrder.job_status) && !isInProgress(workOrder.job_status) && (
+                  {!isAccepted(workOrder.job_status ?? workOrder.status) && !isPaused(workOrder.job_status ?? workOrder.status) && !isInProgress(workOrder.job_status ?? workOrder.status) && (
                     <p className="text-muted mb-0 small">No status actions available for this work order.</p>
                   )}
                 </div>

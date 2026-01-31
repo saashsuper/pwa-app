@@ -1,5 +1,6 @@
-import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
+import React, { createContext, useContext, useState, useEffect, ReactNode, useRef } from 'react';
 import authService, { User, LoginCredentials } from '../services/authService';
+import { registerPushSubscription } from '../utils/pushNotifications';
 
 interface AuthContextType {
   user: User | null;
@@ -55,6 +56,17 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     initAuth();
   }, []);
 
+  // Register push notifications for Contractor Admin users
+  const pushRegisteredRef = useRef(false);
+  useEffect(() => {
+    if (!user || pushRegisteredRef.current) return;
+    const isContractorAdmin = user.user_type?.name === 'Contractor Admin';
+    if (!isContractorAdmin) return;
+
+    pushRegisteredRef.current = true;
+    registerPushSubscription().catch((err) => console.warn('Push registration skipped:', err));
+  }, [user]);
+
   const login = async (credentials: LoginCredentials) => {
     setLoading(true);
     try {
@@ -71,6 +83,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   const logout = async () => {
     setLoading(true);
     try {
+      pushRegisteredRef.current = false;
       await authService.logout();
       setUser(null);
     } finally {

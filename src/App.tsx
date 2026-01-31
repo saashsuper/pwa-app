@@ -1,6 +1,8 @@
 import { createBrowserRouter, RouterProvider } from "react-router-dom";
 import { AuthProvider } from "./contexts/AuthContext";
+import { NotificationsProvider } from "./contexts/NotificationsContext";
 import ProtectedRoute from "./components/common/ProtectedRoute";
+import NotificationListener from "./components/common/NotificationListener";
 import ErrorBoundary from "./components/common/ErrorBoundary";
 import RouteError from "./components/common/RouteError";
 import MainHome from "./components/main-home";
@@ -284,7 +286,10 @@ function App() {
 	return (
 		<ErrorBoundary>
 			<AuthProvider>
-				<RouterProvider router={router} />
+				<NotificationsProvider>
+					<NotificationListener />
+					<RouterProvider router={router} />
+				</NotificationsProvider>
 			</AuthProvider>
 		</ErrorBoundary>
 	);

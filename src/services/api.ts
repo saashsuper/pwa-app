@@ -38,11 +38,14 @@ api.interceptors.response.use(
   (error: AxiosError) => {
     console.error('API Error:', error.message);
     
-    // Handle 401 unauthorized
+    // Handle 401 unauthorized - redirect to login, preserve destination for post-login redirect
     if (error.response?.status === 401) {
       localStorage.removeItem(AppConstants.tokenKey);
       localStorage.removeItem(AppConstants.userKey);
-      window.location.href = '/login';
+      const currentPath = window.location.pathname + window.location.search;
+      // Use URL param since window.location doesn't support state
+      const redirect = currentPath && currentPath !== '/login' ? `?redirect=${encodeURIComponent(currentPath)}` : '';
+      window.location.href = `/login${redirect}`;
     }
     
     return Promise.reject(error);

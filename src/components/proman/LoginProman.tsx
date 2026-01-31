@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { Link, useNavigate, useSearchParams, useLocation } from "react-router-dom";
 import { useAuth } from "../../contexts/AuthContext";
 import AppConstants from "../../config/constants";
 
@@ -10,6 +10,12 @@ const LoginProman = () => {
   const [error, setError] = useState<string>("");
   const { login, loading } = useAuth();
   const navigate = useNavigate();
+  const location = useLocation();
+  const [searchParams] = useSearchParams();
+  // Prefer state.redirect (from ProtectedRoute) then URL param then dashboard
+  const redirectTo = (location.state as { redirect?: string })?.redirect
+    || searchParams.get('redirect')
+    || '/dashboard';
 
   const [focusedInput, setFocusedInput] = useState<string | null>(null);
 
@@ -36,7 +42,11 @@ const LoginProman = () => {
 
     try {
       await login({ email, password });
-      navigate("/dashboard");
+      // Redirect to intended page (work order from notification) or dashboard
+      const target = typeof redirectTo === 'string' && redirectTo.startsWith('/') && !redirectTo.startsWith('//')
+        ? redirectTo
+        : '/dashboard';
+      navigate(target, { replace: true });
     } catch (err: any) {
       setError(err.message || "Login failed. Please try again.");
     }

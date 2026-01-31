@@ -139,6 +139,34 @@ class AuthService {
   getToken(): string | null {
     return localStorage.getItem(AppConstants.tokenKey);
   }
+
+  /**
+   * Update FCM token - deprecated, use updatePushSubscription for Web Push.
+   */
+  async updateFcmToken(_fcmToken: string | null): Promise<void> {
+    // No-op: PWA uses Web Push (updatePushSubscription) instead
+  }
+
+  /**
+   * Update push subscription for web push notifications.
+   * Call after login when the user grants notification permission.
+   * Pass the subscription object from navigator.serviceWorker.ready.then(reg => reg.pushManager.subscribe(...))
+   */
+  async updatePushSubscription(subscription: PushSubscription | null): Promise<void> {
+    try {
+      const token = localStorage.getItem(AppConstants.tokenKey);
+      if (!token || !subscription) return;
+
+      const payload = subscription.toJSON();
+      await api.post(AppConstants.endpoints.updatePushSubscription, {
+        endpoint: payload.endpoint,
+        keys: payload.keys,
+        contentEncoding: 'aesgcm',
+      });
+    } catch (error) {
+      console.warn('Failed to update push subscription:', error);
+    }
+  }
 }
 
 export default new AuthService();

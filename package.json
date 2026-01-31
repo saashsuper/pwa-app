@@ -44,6 +44,7 @@
     "eslint-plugin-react-refresh": "^0.4.7",
     "or": "^0.2.0",
     "typescript": "^5.5.4",
-    "vite": "^5.3.4"
+    "vite": "^5.3.4",
+    "vite-plugin-pwa": "^1.2.0"
   }
 }
