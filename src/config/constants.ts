@@ -1,38 +1,47 @@
 // API Configuration
 // Matches the Flutter app's AppConstants
 
-// Determine API URL based on environment
-// Development: Use VITE_API_URL from .env.local or default to DDEV URL
-// Production: Use VITE_API_URL from environment or default to production URL
+const PRODUCTION_API_URL = 'https://absolute.saashmagna.com/mobile-api';
+const PRODUCTION_BASE_URL = 'https://absolute.saashmagna.com';
+const DEV_API_URL = 'http://localhost:5173/mobile-api'; // Uses Vite proxy to backend
+
+const isDev = import.meta.env.DEV || import.meta.env.MODE === 'development';
+
+// API URL: dev uses local (proxy), production uses absolute.saashmagna.com
+// Override with VITE_API_URL in .env
 const getApiUrl = (): string => {
-  // Check if VITE_API_URL is explicitly set (highest priority)
-  if (import.meta.env.VITE_API_URL) {
-    return import.meta.env.VITE_API_URL;
+  const url = import.meta.env.VITE_API_URL;
+  if (url && String(url).trim()) {
+    const u = String(url).trim();
+    return u.endsWith('/mobile-api') ? u : `${u.replace(/\/$/, '')}/mobile-api`;
   }
-  
-  // Check if we're in development mode
-  if (import.meta.env.DEV || import.meta.env.MODE === 'development') {
-    // Default to local development URL
-    return 'http://127.0.0.1:32777/mobile-api';
+  return isDev ? DEV_API_URL : PRODUCTION_API_URL;
+};
+
+// Base URL: backend root for images/storage (always production URL)
+// In dev, images still load from backend
+const getBaseUrl = (): string => {
+  const url = import.meta.env.VITE_BASE_URL;
+  if (url && String(url).trim()) {
+    return String(url).trim().replace(/\/$/, '');
   }
-  
-  // Production fallback
-  return 'https://saashmagna.com/mobile-api';
+  return PRODUCTION_BASE_URL;
 };
 
 const API_URL = getApiUrl();
+const BASE_URL = getBaseUrl();
 
 // Log API URL in development for debugging
-if (import.meta.env.DEV) {
+if (isDev) {
   console.log('🌐 API URL:', API_URL);
+  console.log('🏠 Base URL:', BASE_URL);
   console.log('🔧 Environment:', import.meta.env.MODE);
-  console.log('📝 VITE_API_URL:', import.meta.env.VITE_API_URL || 'not set');
 }
 
 export const AppConstants = {
   // API Configuration
   apiUrl: API_URL,
-  baseUrl: API_URL.replace('/mobile-api', ''),
+  baseUrl: BASE_URL,
 
   // App Information
   appName: 'Absolute Property Management',
