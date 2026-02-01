@@ -13,6 +13,14 @@ export default defineConfig({
     host: 'localhost', // Use localhost to avoid permission issues
     port: 5173,
     strictPort: true, // Fail if 5173 is in use instead of trying another port
+    proxy: {
+      '/mobile-api': {
+        target: 'https://absolute.saashmagna.com',
+        changeOrigin: true,
+        secure: false,
+        rewrite: (path) => path,
+      },
+    },
   },
 });
 
