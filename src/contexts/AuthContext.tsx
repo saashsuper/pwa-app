@@ -56,12 +56,15 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     initAuth();
   }, []);
 
-  // Register push notifications for Contractor Admin users
+  // Register push notifications for Contractor Admin and Property Manager users
   const pushRegisteredRef = useRef(false);
   useEffect(() => {
     if (!user || pushRegisteredRef.current) return;
-    const isContractorAdmin = user.user_type?.name === 'Contractor Admin';
-    if (!isContractorAdmin) return;
+    const userTypeName = user.user_type?.name;
+    const shouldRegisterPush = userTypeName === 'Contractor Admin' || 
+                               userTypeName === 'Contractor User' ||
+                               userTypeName === 'Property manager';
+    if (!shouldRegisterPush) return;
 
     pushRegisteredRef.current = true;
     registerPushSubscription().catch((err) => console.warn('Push registration skipped:', err));

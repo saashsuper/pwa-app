@@ -2,7 +2,7 @@ import { Link, useNavigate, useLocation } from "react-router-dom";
 import { useAuth } from "../../contexts/AuthContext";
 import AppConstants from "../../config/constants";
 
-const nav_data = [
+const base_nav_data = [
 	{ id: 1, icon: "house", title: "Dashboard", link: "dashboard" },
 	{ id: 2, icon: "clipboard-check", title: "Work Orders", link: "work-orders" },
 	{ id: 4, icon: "person-circle", title: "Profile", link: "profile" },
@@ -11,7 +11,16 @@ const nav_data = [
 const FooterTwo = () => {
 	const navigate = useNavigate();
 	const location = useLocation();
-	const { logout } = useAuth();
+	const { user, logout } = useAuth();
+	const isPropertyManager = user?.user_type?.name === 'Property manager';
+	const nav_data = isPropertyManager
+		? [
+			{ id: 1, icon: "house", title: "Dashboard", link: "dashboard" },
+			{ id: 2, icon: "clipboard-check", title: "Work Orders", link: "work-orders" },
+			{ id: 3, icon: "building", title: "Blocks", link: "blocks" },
+			{ id: 4, icon: "person-circle", title: "Profile", link: "profile" },
+		]
+		: base_nav_data;
 
 	const handleLogout = async () => {
 		await logout();
@@ -27,6 +36,9 @@ const FooterTwo = () => {
 		if (path === '/inspections') {
 			// Match /inspections and /inspection/:id routes if they exist
 			return location.pathname === path || location.pathname.startsWith('/inspection/');
+		}
+		if (path === '/blocks') {
+			return location.pathname === path || location.pathname.startsWith('/blocks/');
 		}
 		return location.pathname === path || location.pathname.startsWith(path + '/');
 	};

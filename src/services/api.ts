@@ -10,8 +10,8 @@ const api: AxiosInstance = axios.create({
   },
   // Note: We're using Bearer tokens, not cookies, so withCredentials is not needed
   // withCredentials: true, // Only needed if using cookies/sessions
-  // Don't reject on any status code - handle in components
-  validateStatus: (status) => status < 500,
+  // Reject on 401 (redirect to login) and 5xx; accept 2xx and 4xx (except 401) for component handling
+  validateStatus: (status) => (status >= 200 && status < 300) || (status >= 403 && status < 500),
 });
 
 // Request interceptor - add auth token

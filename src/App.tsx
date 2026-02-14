@@ -21,6 +21,10 @@ import WorkOrderTeam from "./components/proman/WorkOrderTeam";
 import InspectionsList from "./components/proman/InspectionsList";
 import ProfileProman from "./components/proman/ProfileProman";
 import IssueDetail from "./components/proman/IssueDetail";
+import BlockList from "./components/proman/BlockList";
+import BlockDetail from "./components/proman/BlockDetail";
+import UnitDetail from "./components/proman/UnitDetail";
+import CreateIssuePage from "./components/proman/CreateIssuePage";
 import CallToAction from "./components/call-to-action";
 import HeroBlocks from "./components/hero-blocks";
 import Pages from "./components/pages";
@@ -170,6 +174,36 @@ const router = createBrowserRouter([
 	},
 	{ 
 		path: "/issue/:id", 
+		element: <ProtectedRoute><IssueDetail /></ProtectedRoute>,
+		errorElement: <RouteError />
+	},
+	{ 
+		path: "/blocks", 
+		element: <ProtectedRoute><BlockList /></ProtectedRoute>,
+		errorElement: <RouteError />
+	},
+	{ 
+		path: "/blocks/:blockId/units/:unitId", 
+		element: <ProtectedRoute><UnitDetail /></ProtectedRoute>,
+		errorElement: <RouteError />
+	},
+	{ 
+		path: "/blocks/:blockId/create-issue", 
+		element: <ProtectedRoute><CreateIssuePage /></ProtectedRoute>,
+		errorElement: <RouteError />
+	},
+	{ 
+		path: "/blocks/:id", 
+		element: <ProtectedRoute><BlockDetail /></ProtectedRoute>,
+		errorElement: <RouteError />
+	},
+	{ 
+		path: "/work-orders/:id", 
+		element: <ProtectedRoute><WorkOrderDetail /></ProtectedRoute>,
+		errorElement: <RouteError />
+	},
+	{ 
+		path: "/issues/:id", 
 		element: <ProtectedRoute><IssueDetail /></ProtectedRoute>,
 		errorElement: <RouteError />
 	},

@@ -27,6 +27,7 @@ const HeaderTwo = () => {
 
 	// Check if user is a contractor
 	const isContractor = user?.user_type?.name?.includes('Contractor') || false;
+	const isPropertyManager = user?.user_type?.name === 'Property manager';
 
 	// Close dropdown when clicking outside
 	useEffect(() => {
@@ -48,6 +49,9 @@ const HeaderTwo = () => {
 		if (path === '/inspections') {
 			// Match /inspections and /inspection/:id routes if they exist
 			return location.pathname === path || location.pathname.startsWith('/inspection/');
+		}
+		if (path === '/blocks') {
+			return location.pathname === path || location.pathname.startsWith('/blocks/');
 		}
 		return location.pathname === path || location.pathname.startsWith(path + '/');
 	};
@@ -262,6 +266,21 @@ const HeaderTwo = () => {
 								<i className="bi bi-clipboard-check"></i> Work Orders
 							</Link>
 						</li>
+						{isPropertyManager && (
+							<li>
+								<Link 
+									to="/blocks" 
+									className={isActive('/blocks') ? 'active' : ''}
+									style={isActive('/blocks') ? { 
+										backgroundColor: `${AppConstants.primaryColor}15`,
+										color: AppConstants.primaryColor,
+										borderLeft: `3px solid ${AppConstants.primaryColor}`
+									} : {}}
+								>
+									<i className="bi bi-building"></i> Blocks
+								</Link>
+							</li>
+						)}
 						{!isContractor && (
 							<li>
 								<Link 

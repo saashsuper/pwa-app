@@ -7,8 +7,9 @@ import AppConstants from "../../config/constants";
 const Dashboard = () => {
   const { user } = useAuth();
   
-  // Check if user is a contractor
+  // Check user type
   const isContractor = user?.user_type?.name?.includes('Contractor') || false;
+  const isPropertyManager = user?.user_type?.name === 'Property manager';
 
   return (
     <>
@@ -37,35 +38,66 @@ const Dashboard = () => {
 
             {/* Quick Stats Cards */}
             <div className="row g-3 mt-4">
-              <div className={isContractor ? "col-12" : "col-6"}>
-                <Link to="/work-orders" className="text-decoration-none">
-                  <div 
-                    className="card shadow-sm" 
-                    style={{ 
-                      cursor: 'pointer', 
-                      transition: 'all 0.2s ease-in-out'
-                    }}
-                    onMouseEnter={(e) => {
-                      e.currentTarget.style.transform = 'translateY(-2px)';
-                      e.currentTarget.style.boxShadow = '0 4px 8px rgba(0,0,0,0.15)';
-                    }}
-                    onMouseLeave={(e) => {
-                      e.currentTarget.style.transform = 'translateY(0)';
-                      e.currentTarget.style.boxShadow = '';
-                    }}
-                  >
-                    <div className="card-body text-center">
-                      <i className="bi bi-clipboard-check mb-2" style={{ fontSize: '32px', color: AppConstants.primaryColor }}></i>
-                      <h6 className="mb-1">Work Orders</h6>
-                      <p className="mb-0 text-muted small">View & Manage</p>
-                    </div>
+              {/* Property Manager View */}
+              {isPropertyManager && (
+                <>
+                  <div className="col-6">
+                    <Link to="/blocks" className="text-decoration-none">
+                      <div 
+                        className="card shadow-sm" 
+                        style={{ 
+                          cursor: 'pointer', 
+                          transition: 'all 0.2s ease-in-out'
+                        }}
+                        onMouseEnter={(e) => {
+                          e.currentTarget.style.transform = 'translateY(-2px)';
+                          e.currentTarget.style.boxShadow = '0 4px 8px rgba(0,0,0,0.15)';
+                        }}
+                        onMouseLeave={(e) => {
+                          e.currentTarget.style.transform = 'translateY(0)';
+                          e.currentTarget.style.boxShadow = '';
+                        }}
+                      >
+                        <div className="card-body text-center">
+                          <i className="bi bi-building mb-2" style={{ fontSize: '32px', color: AppConstants.primaryColor }}></i>
+                          <h6 className="mb-1">Blocks</h6>
+                          <p className="mb-0 text-muted small">Manage Properties</p>
+                        </div>
+                      </div>
+                    </Link>
                   </div>
-                </Link>
-              </div>
+                  <div className="col-6">
+                    <Link to="/work-orders" className="text-decoration-none">
+                      <div 
+                        className="card shadow-sm" 
+                        style={{ 
+                          cursor: 'pointer', 
+                          transition: 'all 0.2s ease-in-out'
+                        }}
+                        onMouseEnter={(e) => {
+                          e.currentTarget.style.transform = 'translateY(-2px)';
+                          e.currentTarget.style.boxShadow = '0 4px 8px rgba(0,0,0,0.15)';
+                        }}
+                        onMouseLeave={(e) => {
+                          e.currentTarget.style.transform = 'translateY(0)';
+                          e.currentTarget.style.boxShadow = '';
+                        }}
+                      >
+                        <div className="card-body text-center">
+                          <i className="bi bi-clipboard-check mb-2" style={{ fontSize: '32px', color: '#28a745' }}></i>
+                          <h6 className="mb-1">Work Orders</h6>
+                          <p className="mb-0 text-muted small">View & Track</p>
+                        </div>
+                      </div>
+                    </Link>
+                  </div>
+                </>
+              )}
               
-              {!isContractor && (
-                <div className="col-6">
-                  <Link to="/inspections" className="text-decoration-none">
+              {/* Contractor View */}
+              {isContractor && (
+                <div className="col-12">
+                  <Link to="/work-orders" className="text-decoration-none">
                     <div 
                       className="card shadow-sm" 
                       style={{ 
@@ -82,13 +114,69 @@ const Dashboard = () => {
                       }}
                     >
                       <div className="card-body text-center">
-                        <i className="bi bi-search mb-2" style={{ fontSize: '32px', color: '#28a745' }}></i>
-                        <h6 className="mb-1">Inspections</h6>
-                        <p className="mb-0 text-muted small">Track Progress</p>
+                        <i className="bi bi-clipboard-check mb-2" style={{ fontSize: '32px', color: AppConstants.primaryColor }}></i>
+                        <h6 className="mb-1">Work Orders</h6>
+                        <p className="mb-0 text-muted small">View & Manage</p>
                       </div>
                     </div>
                   </Link>
                 </div>
+              )}
+              
+              {/* Other Users - Inspections */}
+              {!isContractor && !isPropertyManager && (
+                <>
+                  <div className="col-6">
+                    <Link to="/work-orders" className="text-decoration-none">
+                      <div 
+                        className="card shadow-sm" 
+                        style={{ 
+                          cursor: 'pointer', 
+                          transition: 'all 0.2s ease-in-out'
+                        }}
+                        onMouseEnter={(e) => {
+                          e.currentTarget.style.transform = 'translateY(-2px)';
+                          e.currentTarget.style.boxShadow = '0 4px 8px rgba(0,0,0,0.15)';
+                        }}
+                        onMouseLeave={(e) => {
+                          e.currentTarget.style.transform = 'translateY(0)';
+                          e.currentTarget.style.boxShadow = '';
+                        }}
+                      >
+                        <div className="card-body text-center">
+                          <i className="bi bi-clipboard-check mb-2" style={{ fontSize: '32px', color: AppConstants.primaryColor }}></i>
+                          <h6 className="mb-1">Work Orders</h6>
+                          <p className="mb-0 text-muted small">View & Manage</p>
+                        </div>
+                      </div>
+                    </Link>
+                  </div>
+                  <div className="col-6">
+                    <Link to="/inspections" className="text-decoration-none">
+                      <div 
+                        className="card shadow-sm" 
+                        style={{ 
+                          cursor: 'pointer', 
+                          transition: 'all 0.2s ease-in-out'
+                        }}
+                        onMouseEnter={(e) => {
+                          e.currentTarget.style.transform = 'translateY(-2px)';
+                          e.currentTarget.style.boxShadow = '0 4px 8px rgba(0,0,0,0.15)';
+                        }}
+                        onMouseLeave={(e) => {
+                          e.currentTarget.style.transform = 'translateY(0)';
+                          e.currentTarget.style.boxShadow = '';
+                        }}
+                      >
+                        <div className="card-body text-center">
+                          <i className="bi bi-search mb-2" style={{ fontSize: '32px', color: '#28a745' }}></i>
+                          <h6 className="mb-1">Inspections</h6>
+                          <p className="mb-0 text-muted small">Track Progress</p>
+                        </div>
+                      </div>
+                    </Link>
+                  </div>
+                </>
               )}
             </div>
 
@@ -100,6 +188,17 @@ const Dashboard = () => {
                   Quick Actions
                 </h6>
                 <div className="list-group list-group-flush">
+                  {isPropertyManager && (
+                    <a href="/blocks" className="list-group-item list-group-item-action d-flex align-items-center">
+                      <i className="bi bi-building me-3" style={{ fontSize: '20px', color: AppConstants.primaryColor }}></i>
+                      <div className="flex-grow-1">
+                        <div className="fw-bold">My Blocks</div>
+                        <small className="text-muted">View assigned properties</small>
+                      </div>
+                      <i className="bi bi-chevron-right"></i>
+                    </a>
+                  )}
+                  
                   <a href="/work-orders" className="list-group-item list-group-item-action d-flex align-items-center">
                     <i className="bi bi-clipboard-data me-3" style={{ fontSize: '20px', color: AppConstants.primaryColor }}></i>
                     <div className="flex-grow-1">
@@ -109,7 +208,7 @@ const Dashboard = () => {
                     <i className="bi bi-chevron-right"></i>
                   </a>
                   
-                  {!isContractor && (
+                  {!isContractor && !isPropertyManager && (
                     <a href="/inspections" className="list-group-item list-group-item-action d-flex align-items-center">
                       <i className="bi bi-clipboard-check me-3" style={{ fontSize: '20px', color: '#28a745' }}></i>
                       <div className="flex-grow-1">

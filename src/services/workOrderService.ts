@@ -70,6 +70,8 @@ export interface WorkOrder {
     deadline_date?: string;
     acceptance_status?: string;
     rejection_reason?: string;
+    /** True if the current user is a team member (only team members can change status after acceptance) */
+    is_team_member?: boolean;
     images?: Array<{
         id: number;
         image_path?: string;

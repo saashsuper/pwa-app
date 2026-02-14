@@ -68,6 +68,10 @@ export const AppConstants = {
     inspections: '/inspections/my-inspections',
     inspectionDetail: '/inspections',
     blockIssueDetail: '/block-issues',
+    blocks: '/blocks',
+    myBlocks: '/blocks/my-blocks',
+    issues: '/block-issues',
+    myIssues: '/block-issues/my-issues',
   }
 };
 

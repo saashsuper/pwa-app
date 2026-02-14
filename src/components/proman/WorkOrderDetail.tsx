@@ -269,8 +269,10 @@ const WorkOrderDetail = () => {
     return String(status).toLowerCase() === 'accepted';
   };
 
-  const isContractorAdmin = (): boolean => {
-    return user?.user_type?.name === 'Contractor Admin';
+  /** Any contractor or company member can accept/reject a job */
+  const canAcceptOrReject = (): boolean => {
+    const type = user?.user_type?.name;
+    return type === 'Contractor Admin' || type === 'Contractor User';
   };
 
   const handleAccept = async () => {
@@ -532,8 +534,8 @@ const WorkOrderDetail = () => {
               )}
             </div>
 
-            {/* Accept/Reject Actions - Only for Contractor Admin on Scheduled Work Orders (status = 1) */}
-            {isContractorAdmin() && isScheduled(workOrder.job_status) && (
+            {/* Accept/Reject Actions - Any contractor or company member on Scheduled Work Orders (status = 1) */}
+            {canAcceptOrReject() && isScheduled(workOrder.job_status) && (
               <div className="card mb-3 border-warning">
                 <div className="card-body">
                   <h6 className="mb-3">
@@ -572,7 +574,7 @@ const WorkOrderDetail = () => {
               </div>
             )}
 
-            {/* Status Change Toggles - Only show if not completed */}
+            {/* Status Change Toggles - Only team members can change status after acceptance */}
             {!isCompleted(workOrder.job_status ?? workOrder.status) && (
               <div className="card mb-3">
                 <div className="card-body">
@@ -580,7 +582,25 @@ const WorkOrderDetail = () => {
                     <i className="bi bi-sliders me-2" style={{ color: AppConstants.primaryColor }}></i>
                     Status Actions
                   </h6>
-                  
+                  {(() => {
+                    const canChangeStatus = workOrder.is_team_member === true;
+                    const isAcceptedOrLater = isAccepted(workOrder.job_status ?? workOrder.status) || isPaused(workOrder.job_status ?? workOrder.status) || isInProgress(workOrder.job_status ?? workOrder.status);
+                    if (isAcceptedOrLater && !canChangeStatus) {
+                      return (
+                        <p className="text-muted mb-0 small">
+                          Only team members can change work order status after it has been accepted.
+                        </p>
+                      );
+                    }
+                    if (!isAcceptedOrLater) {
+                      return (
+                        <p className="text-muted mb-0 small">No status actions available for this work order.</p>
+                      );
+                    }
+                    return null;
+                  })()}
+                  {workOrder.is_team_member === true && (isAccepted(workOrder.job_status ?? workOrder.status) || isPaused(workOrder.job_status ?? workOrder.status) || isInProgress(workOrder.job_status ?? workOrder.status)) && (
+                  <>
                   {/* Start Toggle for Accepted Work Orders */}
                   {isAccepted(workOrder.job_status ?? workOrder.status) && (
                     <div className="mb-4">
@@ -703,6 +723,8 @@ const WorkOrderDetail = () => {
 
                   {!isAccepted(workOrder.job_status ?? workOrder.status) && !isPaused(workOrder.job_status ?? workOrder.status) && !isInProgress(workOrder.job_status ?? workOrder.status) && (
                     <p className="text-muted mb-0 small">No status actions available for this work order.</p>
+                  )}
+                  </>
                   )}
                 </div>
               </div>
